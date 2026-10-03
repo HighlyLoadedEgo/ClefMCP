@@ -25,11 +25,20 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
-      - run: npm publish --provenance --access public
+      - name: Publish to npm (skips when the version is already on the registry)
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if npm view "clef-mcp@$V" version >/dev/null 2>&1; then
+            echo "clef-mcp@$V already published, skipping npm publish"
+          else
+            npm publish --provenance --access public
+          fi
       - name: Publish to the official MCP Registry
         run: |
           VERSION=$(node -p "require('./package.json').version")
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.json.tmp
           mv server.json.tmp server.json
-          brew install mcp-publisher
+          curl -LsS "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_x64.tar.gz" -o /tmp/mcp-publisher.tgz
+          tar -xzf /tmp/mcp-publisher.tgz -C /tmp mcp-publisher
+          sudo mv /tmp/mcp-publisher /usr/local/bin/mcp-publisher
           mcp-publisher publish
