@@ -63,6 +63,18 @@ args = []
 }
 ```
 
+**ZCode** — `~/.zcode/cli/config.json` (user scope; servers auto-connect in new sessions):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "clef-mcp": { "command": "clef-mcp", "args": [], "type": "stdio" }
+    }
+  }
+}
+```
+
 **Generic MCP client** — any client that speaks MCP over stdio: run `clef-mcp` as the server command.
 
 Ready-made snippets live in [`examples/`](examples/).
@@ -130,6 +142,22 @@ Strictly structured — the server never turns the result into prose:
 ```
 
 `state` is treated strictly as **data**: it is never interpreted as instructions for the MCP server itself (see [Security](#security--data-handling)).
+
+## Teach your agent (skill)
+
+The tool schema tells the client *what* `clef_decide` accepts; agents also need to know *when* to reach for it and *how* to frame decisions. The bundled skill covers that: decision patterns (next action / routing / classification / noul / score), batching up to 64 questions into one forward pass, writing mutually exclusive criteria, interpreting distributions (argmax vs flat), thresholds for safety-adjacent calls, and error recovery.
+
+Install it for your agent(s):
+
+```bash
+# from this repo
+cp -r skills/clef-decisions ~/.agents/skills/
+
+# or from the npm package
+cp -r "$(npm root -g)/clef-mcp/skills/clef-decisions" ~/.agents/skills/
+```
+
+`~/.agents/skills/` is the shared location for ZCode / Claude Code / Codex-style agents.
 
 ## CLI
 
