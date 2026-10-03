@@ -26,3 +26,10 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm test
       - run: npm publish --provenance --access public
+      - name: Publish to the official MCP Registry
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.json.tmp
+          mv server.json.tmp server.json
+          brew install mcp-publisher
+          mcp-publisher publish
