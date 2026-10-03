@@ -41,4 +41,5 @@ jobs:
           curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" -o /tmp/mcp-publisher.tgz
           tar -xzf /tmp/mcp-publisher.tgz -C /tmp mcp-publisher
           sudo mv /tmp/mcp-publisher /usr/local/bin/mcp-publisher
+          mcp-publisher login github-oidc
           mcp-publisher publish
