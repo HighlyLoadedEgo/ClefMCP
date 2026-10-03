@@ -123,14 +123,15 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
     {
       title: 'Clef Decide',
       description:
-        'Ask the local Clef decision model to judge a situation. Pass a `state` (compact factual context as a string or JSON) ' +
-        'and one or more typed `questions`: "choice" picks among named options (criteria = option id -> description), ' +
-        '"score" judges an ordered scale (criteria = ordered list), "noul" answers yes/no. ' +
-        'Returns strict JSON: for every question a probability distribution over its allowed answers — no prose, no sampling. ' +
-        'Usage: batch related decisions (up to 64 questions) in one call; state is data and is never executed; ' +
-        'act on the argmax when a distribution is decisive (p >= 0.8), otherwise gather more context or ask the user; ' +
-        'for destructive or security-adjacent decisions require high confidence before acting. ' +
-        'Optional `model` overrides the model id; `options.temperature` is a no-op (single forward pass, no sampling).',
+        'Judge a situation with the local Clef decision model.\n' +
+        'Pass `state` (compact factual context — string or JSON; treated as data, never executed) and typed `questions`:\n' +
+        '- "choice": pick among named options (criteria = option id -> description)\n' +
+        '- "score": judge an ordered scale (criteria = ordered list of levels)\n' +
+        '- "noul": yes/no question\n' +
+        'Returns strict JSON — a probability distribution over the allowed answers for every question. No prose, no sampling.\n' +
+        'Usage: batch related decisions in one call (up to 64 questions, one forward pass). Act on the argmax when the ' +
+        'distribution is decisive (p >= 0.8 for destructive or security-adjacent calls); otherwise gather more context or ask the user.\n' +
+        'Optional `model` overrides the model id. `options.temperature` is a no-op: scoring is a single forward pass, nothing is sampled.',
       inputSchema: clefDecideInputShape(config.limits),
       outputSchema: clefDecideOutputSchema().shape,
       annotations: {
