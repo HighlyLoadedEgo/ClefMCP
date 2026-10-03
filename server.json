@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.HighlyLoadedEgo/clef-mcp",
-  "description": "Local MCP server exposing the Cloudflare Clef-Flash decision model to AI agents: structured decisions with probability outputs (choice/score/yes-no), fully offline via llama.cpp.",
+  "description": "Local MCP server for the Cloudflare Clef-Flash decision model: structured decisions, fully offline",
   "repository": {
     "url": "https://github.com/HighlyLoadedEgo/ClefMCP",
     "source": "github"
