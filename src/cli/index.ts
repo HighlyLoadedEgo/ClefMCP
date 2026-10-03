@@ -7,6 +7,7 @@ import { runDoctor, type DoctorOptions } from './doctor.js';
 import { runEvals, type EvalsOptions } from './evals.js';
 import { runInstall, type InstallOptions } from './install.js';
 import { runModels } from './models-cmd.js';
+import { runSetup, type SetupOptions } from './setup.js';
 import { runStatus } from './status.js';
 import { runUninstall, type UninstallOptions } from './uninstall.js';
 import { VERSION } from '../version.js';
@@ -46,9 +47,25 @@ program
   .option('-y, --yes', 'assume yes for all prompts (non-interactive)')
   .option('--skip-runtime', 'do not download/verify the llama.cpp runtime')
   .option('--skip-probe', 'skip the post-install inference verification')
+  .option('--setup', 'also register the MCP server + agent skill in detected clients (same as running `clef-mcp setup`)')
   .action(async (opts: InstallOptions) => {
     try {
       await runInstall(opts);
+    } catch (err) {
+      handleCliError(err);
+    }
+  });
+
+program
+  .command('setup')
+  .description('Register the MCP server + agent skill in your clients (zcode, claude-code, codex, cursor).')
+  .option('--clients <list>', 'comma-separated subset: zcode,claude-code,codex,cursor (default: all)')
+  .option('--skill', 'install the agent skill (default)')
+  .option('--no-skill', 'do not touch the agent skill')
+  .option('-y, --yes', 'assume yes for all prompts (non-interactive)')
+  .action(async (opts: SetupOptions) => {
+    try {
+      await runSetup(opts);
     } catch (err) {
       handleCliError(err);
     }

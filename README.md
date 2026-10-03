@@ -26,11 +26,14 @@ Clef does **not** generate prose. It reads a `state` plus a set of typed questio
 # 1. Detect hardware, download the model (~6 GB) + llama.cpp runtime, verify checksum + inference
 npx clef-mcp install
 
-# 2. Run the MCP server (stdio)
+# 2. Register the MCP server + agent skill in your clients (zcode, claude-code, codex, cursor)
+npx clef-mcp setup
+
+# 3. Run the MCP server (stdio)
 npx clef-mcp
 ```
 
-`clef-mcp` (step 2) never downloads anything. If the model is missing, tool calls return a structured `MODEL_NOT_INSTALLED` error with a hint.
+`clef-mcp` (step 3) never downloads anything. If the model is missing, tool calls return a structured `MODEL_NOT_INSTALLED` error with a hint. Steps 1 and 2 can be combined: `npx clef-mcp install --setup`.
 
 ### Register with your MCP client
 
@@ -150,11 +153,12 @@ The tool schema tells the client *what* `clef_decide` accepts; agents also need 
 Install it for your agent(s):
 
 ```bash
-# from this repo
-cp -r skills/clef-decisions ~/.agents/skills/
+# automatic (registers the MCP server too)
+clef-mcp setup
 
-# or from the npm package
-cp -r "$(npm root -g)/clef-mcp/skills/clef-decisions" ~/.agents/skills/
+# or copy the skill manually
+cp -r skills/clef-decisions ~/.agents/skills/                     # from this repo
+cp -r "$(npm root -g)/clef-mcp/skills/clef-decisions" ~/.agents/skills/  # from the npm package
 ```
 
 `~/.agents/skills/` is the shared location for ZCode / Claude Code / Codex-style agents.
@@ -164,6 +168,7 @@ cp -r "$(npm root -g)/clef-mcp/skills/clef-decisions" ~/.agents/skills/
 ```bash
 clef-mcp              # run the MCP server on stdio (default command)
 clef-mcp install      # detect hardware → download model + runtime → verify checksum → verify inference
+clef-mcp setup        # register the MCP server + agent skill in zcode / claude-code / codex / cursor
 clef-mcp models       # list models/quantizations and install status
 clef-mcp status       # runtime, model, memory summary
 clef-mcp doctor       # full diagnosis (platform, RAM, GPU, binary, model, checksum*, inference, MCP config)
@@ -171,7 +176,7 @@ clef-mcp uninstall    # remove the model (and optionally the managed runtime)
 clef-mcp evals        # run the evaluation dataset against the installed model
 ```
 
-Useful flags: `install --quant Q8_0 --yes --skip-probe`, `doctor --deep` (re-hashes the model file), `uninstall --runtime --yes`.
+Useful flags: `install --quant Q8_0 --yes --skip-probe`, `install --setup` (runs setup right after install), `setup --clients zcode,cursor --no-skill`, `doctor --deep` (re-hashes the model file), `uninstall --runtime --yes`.
 
 ## Configuration (environment variables)
 

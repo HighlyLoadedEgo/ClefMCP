@@ -16,6 +16,7 @@ export interface InstallOptions {
   yes?: boolean;
   skipRuntime?: boolean;
   skipProbe?: boolean;
+  setup?: boolean;
 }
 
 const OS_NAMES: Record<string, string> = {
@@ -97,9 +98,17 @@ export async function runInstall(opts: InstallOptions): Promise<void> {
     console.log(`  Inference OK (${(probe.latencyMs / 1000).toFixed(1)}s incl. model load, via ${probe.binarySource} binary)`);
   }
 
+  if (opts.setup) {
+    const { runSetup } = await import('./setup.js');
+    console.log('');
+    await runSetup({ yes: opts.yes });
+    return;
+  }
+
   console.log('\nDone. Start the MCP server with:\n\n  clef-mcp\n');
-  console.log('Then register it with your MCP client, e.g.:\n');
+  console.log('Register it with your agents (or run `clef-mcp setup` to do it automatically):\n');
   console.log('  Claude Code : claude mcp add clef-mcp -- clef-mcp');
   console.log('  Codex       : add [mcp_servers.clef-mcp] to ~/.codex/config.toml (see README)');
-  console.log('  Cursor      : add clef-mcp to .cursor/mcp.json (see README)\n');
+  console.log('  Cursor      : add clef-mcp to .cursor/mcp.json (see README)');
+  console.log('  ZCode       : add clef-mcp to ~/.zcode/cli/config.json (see README)\n');
 }
