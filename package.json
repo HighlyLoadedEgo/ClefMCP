@@ -1,6 +1,6 @@
 {
   "name": "clef-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local MCP server exposing the Clef decision model as a structured clef_decide tool.",
   "type": "module",
   "license": "Apache-2.0",
