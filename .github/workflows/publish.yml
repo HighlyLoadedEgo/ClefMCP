@@ -42,4 +42,14 @@ jobs:
           tar -xzf /tmp/mcp-publisher.tgz -C /tmp mcp-publisher
           sudo mv /tmp/mcp-publisher /usr/local/bin/mcp-publisher
           mcp-publisher login github-oidc
-          mcp-publisher publish
+          # npm CDN can lag a few seconds behind a fresh publish; the registry
+          # validates the npm package, so retry until it is visible.
+          for attempt in 1 2 3 4 5; do
+            if mcp-publisher publish; then
+              exit 0
+            fi
+            echo "registry publish attempt $attempt failed; retrying in 30s..."
+            sleep 30
+          done
+          echo "registry publish failed after 5 attempts" >&2
+          exit 1
