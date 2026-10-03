@@ -1,0 +1,51 @@
+{
+  "name": "clef-mcp",
+  "version": "0.1.0",
+  "description": "Local MCP server exposing the Clef decision model as a structured clef_decide tool.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "clef-mcp contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HighlyLoadedEgo/ClefMCP.git"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "clef",
+    "decision-model",
+    "local-inference",
+    "llama.cpp"
+  ],
+  "bin": {
+    "clef-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "tests/evals",
+    "README.md",
+    "NOTICE",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "npm run build && vitest run",
+    "test:watch": "vitest",
+    "evals": "npm run build && node dist/cli.js evals",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "commander": "^15.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.0"
+  }
+}

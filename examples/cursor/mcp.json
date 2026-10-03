@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "clef-mcp": {
+      "command": "clef-mcp",
+      "args": []
+    }
+  }
+}

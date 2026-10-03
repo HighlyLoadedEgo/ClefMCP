@@ -1,0 +1,21 @@
+# Codex CLI — register clef-mcp as an MCP server.
+# Location: ~/.codex/config.toml
+#
+# If clef-mcp is installed globally (npm i -g clef-mcp):
+[mcp_servers.clef-mcp]
+command = "clef-mcp"
+args = []
+
+# Without a global install, prefer npx:
+# [mcp_servers.clef-mcp]
+# command = "npx"
+# args = ["-y", "clef-mcp"]
+
+# Optional environment overrides:
+# [mcp_servers.clef-mcp.env]
+# CLEF_MODEL = "clef-flash"
+# CLEF_LOG_LEVEL = "error"
+# CLEF_HOME = "~/.cache/clef-mcp"
+
+# One-time setup (downloads the model):
+#   npx clef-mcp install

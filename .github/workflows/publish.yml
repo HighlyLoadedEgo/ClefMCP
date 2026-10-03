@@ -1,0 +1,27 @@
+name: Publish to npm
+
+# Publishes on version tags (v0.1.0, ...). Requires the NPM_TOKEN secret
+# (repo Settings → Secrets and variables → Actions; an automation token
+# from npmjs.com with publish rights for `clef-mcp`).
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
