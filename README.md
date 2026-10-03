@@ -1,28 +1,22 @@
+<div align="center">
+
+<img src="./assets/demo.svg" alt="clef_decide — probability distributions for a production incident" width="880"/>
+
 # clef-mcp
 
 [![npm version](https://img.shields.io/npm/v/clef-mcp.svg)](https://www.npmjs.com/package/clef-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/clef-mcp.svg)](https://www.npmjs.com/package/clef-mcp)
 [![CI](https://github.com/HighlyLoadedEgo/ClefMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/HighlyLoadedEgo/ClefMCP/actions/workflows/ci.yml)
+[![Official MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.HighlyLoadedEgo-blue)](https://registry.modelcontextprotocol.io)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Local [MCP](https://modelcontextprotocol.io) server that gives coding agents (Codex, Claude Code, Cursor, …) access to the **Clef decision model** through a single structured tool: `clef_decide`.
+**A "reflex" for AI coding agents: structured decisions with probabilities — not prose.**
 
-```text
-AI Agent
-   ↓ MCP (stdio)
-clef-mcp
-   ↓ POST /v1/systemone
-llama.cpp (llama-server, local)
-   ↓
-Clef-Flash  →  probability distribution over your answer options
-```
+Local [MCP](https://modelcontextprotocol.io) server that gives agents (Claude Code, Codex, Cursor, ZCode, …) access to the **Clef-Flash** decision model (9B, Apache-2.0 by Cloudflare) through a single tool: `clef_decide`. Pass a `state` and typed questions, get a **probability distribution over your options** in one forward pass. Fully local, offline, no tokens burned.
 
-Clef does **not** generate prose. It reads a `state` plus a set of typed questions and returns, in a single forward pass, a probability for every allowed answer — ideal for "what should the agent do next?" decisions.
+</div>
 
-## Requirements
-
-- macOS (Apple Silicon or x64), Linux (x64/arm64) or Windows x64
-- Node.js ≥ 20
-- ≥ 16 GB of memory (Clef-Flash 9B @ 4-bit); more headroom enables higher precision
+---
 
 ## Quick start
 
@@ -37,65 +31,28 @@ npx clef-mcp setup
 npx clef-mcp
 ```
 
-`clef-mcp` (step 3) never downloads anything. If the model is missing, tool calls return a structured `MODEL_NOT_INSTALLED` error with a hint. Steps 1 and 2 can be combined: `npx clef-mcp install --setup`.
+`clef-mcp` (step 3) never downloads anything. If the model is missing, tool calls return a structured `MODEL_NOT_INSTALLED` error with a hint. Steps 1 and 2 combine: `npx clef-mcp install --setup`.
 
-### Register with your MCP client
+## Why not just ask the LLM?
 
-**Claude Code**
+| | Chat LLM | `clef_decide` |
+|---|---|---|
+| Output | prose, you parse it | strict JSON: probability per option |
+| Determinism | varies per run | single forward pass, no sampling |
+| Latency (1 decision) | seconds of generation | ~0.5 s local |
+| Context cost | grows with every decision | fixed, small schema |
+| Privacy | depends on provider | 100% on-device, works offline |
+| Calibration | vibes | softmax over trained option scores |
 
-```bash
-claude mcp add clef-mcp -- clef-mcp
-# or, without a global install:
-claude mcp add clef-mcp -- npx -y clef-mcp
-```
-
-**Codex** — `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.clef-mcp]
-command = "clef-mcp"
-args = []
-```
-
-**Cursor** — `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "clef-mcp": {
-      "command": "clef-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-**ZCode** — `~/.zcode/cli/config.json` (user scope; servers auto-connect in new sessions):
-
-```json
-{
-  "mcp": {
-    "servers": {
-      "clef-mcp": { "command": "clef-mcp", "args": [], "type": "stdio" }
-    }
-  }
-}
-```
-
-**Generic MCP client** — any client that speaks MCP over stdio: run `clef-mcp` as the server command.
-
-Ready-made snippets live in [`examples/`](examples/).
+Sweet spot: **decision points inside agent loops** — next action, routing, classification, severity, yes/no judgment — asked dozens of times per task.
 
 ## The `clef_decide` tool
-
-### Input
 
 ```json
 {
   "state": {
     "task": "Fix failing tests",
-    "error": "TypeError: Cannot read properties of undefined",
-    "git_diff": "..."
+    "error": "TypeError: Cannot read properties of undefined"
   },
   "questions": {
     "next_action": {
@@ -113,59 +70,122 @@ Ready-made snippets live in [`examples/`](examples/).
       "instructions": "How confident are you in this decision?",
       "criteria": ["very_low", "low", "medium", "high", "very_high"]
     },
-    "is_outage": {
-      "type": "noul",
-      "instructions": "Is a service down?"
-    }
+    "is_outage": { "type": "noul", "instructions": "Is a service down?" }
   }
 }
 ```
 
-| Type | Criteria | Meaning |
-|------|----------|---------|
-| `choice` | map of `option id → description`, or a plain list of options (ids = the strings) | Pick among named options |
-| `score` | ordered list of descriptions | Ordered scale (index = score) |
-| `noul` | optional `{"true": "...", "false": "..."}` | Yes/no question |
+| Type | Criteria | Answer |
+|------|----------|--------|
+| `choice` | map `option id → description`, or a plain list | probability per option |
+| `score` | ordered list (index = score) | probability per level |
+| `noul` | optional `{"true": "...", "false": "..."}` | `{"true": p, "false": 1-p}` |
 
-### Output
-
-Strictly structured — the server never turns the result into prose:
+Response — strictly structured, never prose:
 
 ```json
 {
   "model": "clef-flash",
   "decisions": {
-    "next_action": {
-      "answer": { "inspect": 0.72, "modify": 0.12, "test": 0.14, "ask_user": 0.02 }
-    },
-    "confidence": {
-      "answer": { "very_low": 0.01, "low": 0.04, "medium": 0.18, "high": 0.61, "very_high": 0.16 }
-    },
-    "is_outage": {
-      "answer": { "true": 0.9, "false": 0.1 }
-    }
+    "next_action": { "answer": { "inspect": 0.72, "modify": 0.12, "test": 0.14, "ask_user": 0.02 } },
+    "confidence":  { "answer": { "very_low": 0.01, "low": 0.04, "medium": 0.18, "high": 0.61, "very_high": 0.16 } },
+    "is_outage":   { "answer": { "true": 0.9, "false": 0.1 } }
   }
 }
 ```
 
-`state` is treated strictly as **data**: it is never interpreted as instructions for the MCP server itself (see [Security](#security--data-handling)).
+Batch up to **64 questions per call** — they are scored in one forward pass. `state` is treated strictly as **data**: never executed, never interpreted as instructions for the server.
+
+## Measured, not marketed
+
+Apple M4 Pro, Clef-Flash Q4_K_M (6 GB), single request through the full MCP stdio path:
+
+| Scenario | Latency |
+|---|---|
+| Cold start (incl. model load, once per session) | ~4.4 s |
+| 1 question | ~0.5 s |
+| 10 questions, one call | ~2.9 s |
+| 64 questions, one call | ~18.6 s |
+
+Quality gate: a 30-case evaluation dataset (coding / security / classification / routing / yes-no) — **86.7% pass** on the live model. Run it yourself: `clef-mcp evals`.
+
+## Register with your MCP client
+
+<details open>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add clef-mcp -- clef-mcp
+# or, without a global install:
+claude mcp add clef-mcp -- npx -y clef-mcp
+```
+</details>
+
+<details>
+<summary><b>Codex</b> — <code>~/.codex/config.toml</code></summary>
+
+```toml
+[mcp_servers.clef-mcp]
+command = "clef-mcp"
+args = []
+```
+</details>
+
+<details>
+<summary><b>Cursor</b> — <code>.cursor/mcp.json</code></summary>
+
+```json
+{
+  "mcpServers": {
+    "clef-mcp": { "command": "clef-mcp", "args": [] }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>ZCode</b> — <code>~/.zcode/cli/config.json</code> (user scope, auto-connect)</summary>
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "clef-mcp": { "command": "clef-mcp", "args": [], "type": "stdio" }
+    }
+  }
+}
+```
+</details>
+
+Ready-made snippets: [`examples/`](examples/).
 
 ## Teach your agent (skill)
 
-The tool schema tells the client *what* `clef_decide` accepts; agents also need to know *when* to reach for it and *how* to frame decisions. The bundled skill covers that: decision patterns (next action / routing / classification / noul / score), batching up to 64 questions into one forward pass, writing mutually exclusive criteria, interpreting distributions (argmax vs flat), thresholds for safety-adjacent calls, and error recovery.
-
-Install it for your agent(s):
+The schema tells the client *what* `clef_decide` accepts; agents also need to know *when* to reach for it and *how* to frame decisions. The bundled [`clef-decisions`](skills/clef-decisions/SKILL.md) skill covers decision patterns, batching, criteria writing, distribution interpretation and error recovery:
 
 ```bash
-# automatic (registers the MCP server too)
-clef-mcp setup
-
-# or copy the skill manually
-cp -r skills/clef-decisions ~/.agents/skills/                     # from this repo
-cp -r "$(npm root -g)/clef-mcp/skills/clef-decisions" ~/.agents/skills/  # from the npm package
+clef-mcp setup                                                    # automatic
+cp -r skills/clef-decisions ~/.agents/skills/                     # manual, from repo
+cp -r "$(npm root -g)/clef-mcp/skills/clef-decisions" ~/.agents/skills/  # from npm package
 ```
 
-`~/.agents/skills/` is the shared location for ZCode / Claude Code / Codex-style agents.
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph clients [MCP clients]
+        CC[Claude Code]
+        CX[Codex]
+        CU[Cursor]
+        ZC[ZCode]
+    end
+    clients -- MCP stdio --> S[clef-mcp<br/>validation · limits · structured errors]
+    S -- SystemOne adapter --> R[ClefRuntime<br/>llama.cpp subprocess<br/>127.0.0.1]
+    R -- single forward pass --> M[("Clef-Flash<br/>9B · GGUF · local")]
+    M -. probabilities .-> S -. strict JSON .-> clients
+```
+
+The `ClefRuntime` interface (`load / decide / unload / health`) isolates the engine: MLX or remote runtimes plug in without changing the MCP API. The wire format is `POST /v1/systemone` — the same contract across llama.cpp and other Clef runtimes.
 
 ## CLI
 
@@ -180,44 +200,30 @@ clef-mcp uninstall    # remove the model (and optionally the managed runtime)
 clef-mcp evals        # run the evaluation dataset against the installed model
 ```
 
-Useful flags: `install --quant Q8_0 --yes --skip-probe`, `install --setup` (runs setup right after install), `setup --clients zcode,cursor --no-skill`, `doctor --deep` (re-hashes the model file), `uninstall --runtime --yes`.
+Flags: `install --quant Q8_0 --yes --skip-probe`, `install --setup`, `setup --clients zcode,cursor --no-skill`, `doctor --deep` (re-hash the model file), `uninstall --runtime --yes`.
 
-## Configuration (environment variables)
+## Configuration
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `CLEF_MODEL` | `clef-flash` | Model id (`clef_decide` also accepts a per-call `model`) |
+| `CLEF_MODEL` | `clef-flash` | Model id (per-call `model` also accepted) |
 | `CLEF_HOME` | `~/.cache/clef-mcp` | Cache/model home |
 | `CLEF_RUNTIME` | `llama-cpp` | Inference runtime (v0.1: only llama-cpp) |
-| `CLEF_LOG_LEVEL` | `error` | `error` \| `warn` \| `info` \| `debug` (logs go to **stderr**) |
-| `CLEF_LLAMA_BIN` | – | Explicit path to a `llama-server` binary |
-| `CLEF_LLAMA_RELEASE_TAG` | latest nightly | Pin the managed llama.cpp build, e.g. `b11378` |
+| `CLEF_LOG_LEVEL` | `error` | `error` \| `warn` \| `info` \| `debug` (stderr only) |
+| `CLEF_LLAMA_BIN` | – | Explicit `llama-server` binary path |
+| `CLEF_LLAMA_RELEASE_TAG` | latest nightly | Pin the managed llama.cpp build |
+| `CLEF_LLAMA_BATCH` | `8192` | llama.cpp physical batch (multi-question requests) |
 | `CLEF_MAX_QUESTIONS` | `64` | Max questions per call |
 | `CLEF_MAX_STATE_BYTES` | `1048576` | Max serialized `state` size |
 | `CLEF_MAX_INSTRUCTION_CHARS` | `10000` | Max chars per question instructions |
 
-Runtime selection order: `CLEF_LLAMA_BIN` → managed binary in `CLEF_HOME/runtime` → `llama-server` on `PATH`.
+Runtime resolution: `CLEF_LLAMA_BIN` → managed binary in `CLEF_HOME/runtime` → `llama-server` on `PATH`.
 
-## Storage layout
+Storage: `CLEF_HOME/models/<model>/<quant>/` (model + `manifest.json` with repo/revision/sha256/license) and `CLEF_HOME/runtime/llama.cpp/`.
 
-```text
-~/.cache/clef-mcp/          # or $CLEF_HOME
-├── models/
-│   └── clef-flash/
-│       ├── 4bit/           # Q4_K_M
-│       │   ├── Clef-Flash-Q4_K_M.gguf
-│       │   └── manifest.json   # repo, revision, sha256, license
-│       ├── 8bit/           # Q8_0
-│       └── bf16/           # BF16
-└── runtime/
-    └── llama.cpp/darwin-arm64/llama-server
-```
-
-The model is downloaded from the pinned official GGUF conversion ([ggml-org/Clef-Flash-GGUF](https://huggingface.co/ggml-org/Clef-Flash-GGUF), revision-pinned) and **sha256-verified** against Hugging Face's content hash. It is never repackaged by clef-mcp.
+The model is downloaded from the pinned official GGUF conversion ([ggml-org/Clef-Flash-GGUF](https://huggingface.co/ggml-org/Clef-Flash-GGUF)) and **sha256-verified** against Hugging Face's content hash. It is never repackaged by clef-mcp. Also listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.HighlyLoadedEgo/clef-mcp`.
 
 ## Error handling
-
-Tool errors are structured JSON with a machine-readable code:
 
 ```json
 {
@@ -229,42 +235,28 @@ Tool errors are structured JSON with a machine-readable code:
 }
 ```
 
-Codes: `MODEL_NOT_INSTALLED`, `MODEL_LOAD_FAILED`, `RUNTIME_NOT_FOUND`, `RUNTIME_INIT_FAILED`, `RUNTIME_NOT_SUPPORTED`, `INVALID_INPUT`, `CLEF_INFERENCE_FAILED`, `UNSUPPORTED_PLATFORM`, `OUT_OF_MEMORY`, `CHECKSUM_MISMATCH`, `DOWNLOAD_FAILED`.
-
-Input exceeding the model's 16k-token context is rejected by the runtime with a hint to reduce the state.
-
-## Architecture
-
-```text
-MCP interface (stdio)  →  validation, structured errors
-        ↓
-Clef adapter  →  clef_decide ⇄ SystemOne wire format (request/response mapping)
-        ↓
-ClefRuntime (interface)
-        ↓
-LocalClefRuntime  →  llama.cpp llama-server subprocess
-```
-
-The `ClefRuntime` interface (`load / decide / unload / health`) isolates the engine: future MLX or remote runtimes plug in without changing the MCP API.
+Codes: `MODEL_NOT_INSTALLED`, `MODEL_LOAD_FAILED`, `RUNTIME_NOT_FOUND`, `RUNTIME_INIT_FAILED`, `RUNTIME_NOT_SUPPORTED`, `INVALID_INPUT`, `CLEF_INFERENCE_FAILED`, `UNSUPPORTED_PLATFORM`, `OUT_OF_MEMORY`, `CHECKSUM_MISMATCH`, `DOWNLOAD_FAILED`. Input exceeding the 16k-token model context is rejected with a hint to reduce the state.
 
 ## Security & data handling
 
 - No network servers, no telemetry, no accounts; everything runs locally.
-- The model downloads only on an explicit `install`, over HTTPS, with checksum verification.
+- The model downloads only on an explicit `install`, over HTTPS, checksum-verified.
 - `state` content is passed to the model as data; the server never executes or instruction-interprets it.
 - Filesystem access is limited to `CLEF_HOME` (plus reading standard MCP client config paths in `doctor`).
-- The managed runtime is the official llama.cpp nightly build; pin it with `CLEF_LLAMA_RELEASE_TAG` if you want reproducibility.
+- The managed runtime is the official llama.cpp build; pin it with `CLEF_LLAMA_RELEASE_TAG`.
+
+See [SECURITY.md](SECURITY.md) for the full policy.
 
 ## Development
 
 ```bash
 npm install
 npm run build
-npm test          # unit + integration (uses a fake llama-server, no model needed)
-npm run evals     # needs an installed model; ~30 cases, exit code reflects pass rate
+npm test          # unit + integration (fake llama-server, no model needed)
+npm run evals     # needs an installed model; exit code reflects pass rate
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [`tests/evals/dataset.jsonl`](tests/evals/dataset.jsonl) for the eval format.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [`tests/evals/dataset.jsonl`](tests/evals/dataset.jsonl).
 
 ## License
 

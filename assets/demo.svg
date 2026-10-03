@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="420" viewBox="0 0 880 420" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .chrome { fill: #161b22; }
+      .title { fill: #8b949e; font-size: 12px; }
+      .lbl { fill: #c9d1d9; font-size: 13px; }
+      .dim { fill: #8b949e; font-size: 12px; }
+      .val { font-size: 13px; font-weight: bold; }
+      .json { fill: #7ee787; font-size: 12px; }
+      .key { fill: #79c0ff; }
+      @keyframes grow { from { width: 0; } }
+      .bar { animation: grow 0.9s ease-out; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="880" height="420" rx="10"/>
+  <rect class="chrome" width="880" height="36" rx="10"/>
+  <rect class="chrome" y="18" width="880" height="18"/>
+  <circle cx="22" cy="18" r="6" fill="#ff5f57"/>
+  <circle cx="42" cy="18" r="6" fill="#febc2e"/>
+  <circle cx="62" cy="18" r="6" fill="#28c840"/>
+  <text class="title" x="440" y="23" text-anchor="middle">clef_decide — production incident</text>
+
+  <!-- request -->
+  <text class="dim" x="28" y="66">state:  "prod returns 500 for 40% of requests after a deploy"</text>
+  <text class="dim" x="28" y="84">questions:  action (choice) · urgent (noul)</text>
+
+  <!-- question 1: action -->
+  <text class="key" x="28" y="116">action</text>
+  <text class="dim" x="80" y="116">"What should the coding agent do next?" — choice</text>
+
+  <text class="lbl" x="28" y="142">rollback</text>
+  <rect x="120" y="132" width="527" height="12" rx="3" fill="#3fb950" opacity="0.25"/>
+  <rect class="bar anim" x="120" y="132" width="497" height="12" rx="3" fill="#3fb950"/>
+  <text class="val" x="655" y="143" fill="#3fb950">93.9%</text>
+
+  <text class="lbl" x="28" y="170">hotfix</text>
+  <rect x="120" y="160" width="527" height="12" rx="3" fill="#d29922" opacity="0.25"/>
+  <rect class="bar anim" x="120" y="160" width="17" height="12" rx="3" fill="#d29922"/>
+  <text class="val" x="655" y="171" fill="#d29922">3.2%</text>
+
+  <text class="lbl" x="28" y="198">investigate</text>
+  <rect x="120" y="188" width="527" height="12" rx="3" fill="#58a6ff" opacity="0.25"/>
+  <rect class="bar anim" x="120" y="188" width="9" height="12" rx="3" fill="#58a6ff"/>
+  <text class="val" x="655" y="199" fill="#58a6ff">1.8%</text>
+
+  <text class="lbl" x="28" y="226">wait</text>
+  <rect x="120" y="216" width="527" height="12" rx="3" fill="#8b949e" opacity="0.25"/>
+  <rect class="bar anim" x="120" y="216" width="6" height="12" rx="3" fill="#8b949e"/>
+  <text class="val" x="655" y="227" fill="#8b949e">1.2%</text>
+
+  <!-- question 2: urgent -->
+  <text class="key" x="28" y="262">urgent</text>
+  <text class="dim" x="80" y="262">"Roll back right now?" — noul</text>
+
+  <text class="lbl" x="28" y="288">true</text>
+  <rect x="120" y="278" width="527" height="12" rx="3" fill="#f85149" opacity="0.25"/>
+  <rect class="bar anim" x="120" y="278" width="416" height="12" rx="3" fill="#f85149"/>
+  <text class="val" x="655" y="289" fill="#f85149">78.7%</text>
+
+  <text class="lbl" x="28" y="316">false</text>
+  <rect x="120" y="306" width="527" height="12" rx="3" fill="#8b949e" opacity="0.25"/>
+  <rect class="bar anim" x="120" y="306" width="112" height="12" rx="3" fill="#8b949e"/>
+  <text class="val" x="655" y="317" fill="#8b949e">21.3%</text>
+
+  <!-- raw json note -->
+  <text class="json" x="28" y="356">{ "model": "clef-flash",</text>
+  <text class="json" x="28" y="374">  "<tspan class="key">decisions</tspan>": { "action": { "answer": { "rollback": 0.939, ... } },</text>
+  <text class="json" x="28" y="392">                     "urgent":  { "answer": { "true": 0.787, "false": 0.213 } } } }</text>
+  <text class="dim" x="28" y="410">one forward pass · no prose · no sampling · offline</text>
+</svg>
