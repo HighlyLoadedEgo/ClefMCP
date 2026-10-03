@@ -15,6 +15,12 @@ export interface LlamaCppRuntimeOptions {
   loadTimeoutMs?: number;
   /** Per-request timeout for /v1/systemone. */
   requestTimeoutMs?: number;
+  /**
+   * llama.cpp physical batch size (`-b`/`-ub`). The clef decision path scores
+   * all questions in one sequence, so multi-question requests need more than
+   * the default 512; the clef-mcp limit is 64 questions (~6-8k tokens).
+   */
+  batchSize?: number;
   log?: Logger;
 }
 
@@ -59,11 +65,13 @@ export class LlamaCppRuntime implements ClefRuntime {
   private readonly requestTimeoutMs: number;
   /** Serializes decide() calls: the llama.cpp clef path handles one sequence per batch. */
   private queue: Promise<unknown> = Promise.resolve();
+  private readonly batchSize: number;
 
   constructor(private readonly opts: LlamaCppRuntimeOptions) {
     this.host = opts.host ?? '127.0.0.1';
     this.loadTimeoutMs = opts.loadTimeoutMs ?? 120_000;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 60_000;
+    this.batchSize = opts.batchSize ?? (Number.parseInt(process.env.CLEF_LLAMA_BATCH ?? '', 10) || 8192);
   }
 
   get endpoint(): string {
@@ -87,6 +95,10 @@ export class LlamaCppRuntime implements ClefRuntime {
       '--port',
       String(port),
       '--no-webui',
+      '-b',
+      String(this.batchSize),
+      '-ub',
+      String(this.batchSize),
       ...(this.opts.alias ? ['--alias', this.opts.alias] : []),
     ];
     this.opts.log?.debug('spawning llama-server', { bin: this.opts.serverBin, args });
@@ -219,6 +231,9 @@ export class LlamaCppRuntime implements ClefRuntime {
       throw new ClefError(
         ClefErrorCode.CLEF_INFERENCE_FAILED,
         `Inference failed with HTTP ${res.status}: ${apiMessage.slice(0, 2000)}`,
+        /physical batch size/i.test(apiMessage)
+          ? 'Too many/too large questions for one request. Split into several calls, reduce criteria text, or raise the batch with CLEF_LLAMA_BATCH.'
+          : undefined,
       );
     }
 
