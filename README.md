@@ -1,5 +1,9 @@
 # clef-mcp
 
+[![npm version](https://img.shields.io/npm/v/clef-mcp.svg)](https://www.npmjs.com/package/clef-mcp)
+[![CI](https://github.com/HighlyLoadedEgo/ClefMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/HighlyLoadedEgo/ClefMCP/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Local [MCP](https://modelcontextprotocol.io) server that gives coding agents (Codex, Claude Code, Cursor, …) access to the **Clef decision model** through a single structured tool: `clef_decide`.
 
 ```text
