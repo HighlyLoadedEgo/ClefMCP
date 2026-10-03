@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **MCP prompts** (4): `incident-triage`, `next-action`, `ticket-routing`, `security-review` — canned decision-shaped asks that frame `clef_decide` calls, including safety thresholds for security-adjacent decisions.
 - **MCP resources** (3): `clef-mcp://capabilities` (live capability snapshot), `clef-mcp://evals/schema`, `clef-mcp://evals/dataset`.
 - **MLX runtime** (macOS / Apple Silicon): `MlxRuntime` behind the existing `ClefRuntime` interface, running the bundled `clef_mlx.py serve` from a pinned `mlx-community/clef-flash-4bit` snapshot inside a uv-managed environment. `clef-mcp install --runtime mlx`, `CLEF_RUNTIME=mlx`, `CLEF_MLX_UV` override; uninstall/status/doctor/evals aware.
-- `smithery.yaml` for Smithery.ai listing.
+- `.mcpb` bundle attached to every GitHub Release (installable directly in Claude Desktop and accepted by MCP directories).
 
 ### Changed
 - `CLEF_RUNTIME` now accepts `llama-cpp | mlx`; llama.cpp stays the default.

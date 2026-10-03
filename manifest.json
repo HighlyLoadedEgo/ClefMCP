@@ -1,0 +1,20 @@
+{
+  "manifest_version": "0.3",
+  "name": "clef-mcp",
+  "display_name": "Clef MCP",
+  "version": "0.2.0",
+  "description": "Local MCP server exposing the Cloudflare Clef-Flash decision model: structured decisions with probability outputs, fully offline via llama.cpp.",
+  "author": {
+    "name": "HighlyLoadedEgo"
+  },
+  "documentation": "https://github.com/HighlyLoadedEgo/ClefMCP#readme",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/cli.js"]
+    }
+  },
+  "keywords": ["mcp", "decision-model", "clef", "llama.cpp", "local"]
+}

@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write # npm provenance + trusted publishing (OIDC)
+      contents: write # attach the .mcpb bundle to the GitHub Release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,3 +54,20 @@ jobs:
           done
           echo "registry publish failed after 5 attempts" >&2
           exit 1
+      - name: Build .mcpb bundle
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          jq --arg v "$VERSION" '.version = $v' manifest.json > manifest.json.tmp
+          mv manifest.json.tmp manifest.json
+          STAGE=$(mktemp -d)
+          cp -R dist manifest.json package.json package-lock.json NOTICE LICENSE "$STAGE/"
+          cd "$STAGE"
+          npm ci --omit=dev --no-audit --no-fund
+          npx -y @anthropic-ai/mcpb pack "$STAGE" "$GITHUB_WORKSPACE/clef-mcp-${VERSION}.mcpb"
+      - name: Attach bundle to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release upload "v${VERSION}" "clef-mcp-${VERSION}.mcpb" --clobber || \
+            gh release create "v${VERSION}" "clef-mcp-${VERSION}.mcpb" --title "clef-mcp v${VERSION}" --generate-notes
