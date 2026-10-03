@@ -91,11 +91,13 @@ export async function runDoctor(opts: DoctorOptions): Promise<boolean> {
     });
   }
 
-  // 2. Memory
+  // 2. Memory — advisory: the install flow enforces the real requirement
+  // (pickQuant throws below 16 GB); here it is a warning, not a failure.
   const memGb = info.totalMemBytes / 1024 ** 3;
   checks.push({
     name: 'Memory',
     ok: memGb >= 16,
+    informational: true,
     detail: formatBytes(info.totalMemBytes),
     hint: memGb < 16 ? 'Clef-Flash Q4_K_M needs ~16 GB of memory to run comfortably.' : undefined,
   });
