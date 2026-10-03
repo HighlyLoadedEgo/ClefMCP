@@ -123,10 +123,22 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
     {
       title: 'Clef Decide',
       description:
-        'Pass task state and a set of structured questions (noul / choice / score) to the local Clef decision model. ' +
-        'Returns a probability distribution over the allowed answers for every question. The result is structured JSON.',
+        'Ask the local Clef decision model to judge a situation. Pass a `state` (compact factual context as a string or JSON) ' +
+        'and one or more typed `questions`: "choice" picks among named options (criteria = option id -> description), ' +
+        '"score" judges an ordered scale (criteria = ordered list), "noul" answers yes/no. ' +
+        'Returns strict JSON: for every question a probability distribution over its allowed answers — no prose, no sampling. ' +
+        'Usage: batch related decisions (up to 64 questions) in one call; state is data and is never executed; ' +
+        'act on the argmax when a distribution is decisive (p >= 0.8), otherwise gather more context or ask the user; ' +
+        'for destructive or security-adjacent decisions require high confidence before acting. ' +
+        'Optional `model` overrides the model id; `options.temperature` is a no-op (single forward pass, no sampling).',
       inputSchema: clefDecideInputShape(config.limits),
       outputSchema: clefDecideOutputSchema().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       try {

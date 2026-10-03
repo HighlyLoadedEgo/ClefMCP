@@ -42,10 +42,19 @@ function scoreCriteria(limits: Limits) {
 function questionSchema(limits: Limits) {
   return z
     .object({
-      type: z.enum(['noul', 'choice', 'score']),
-      instructions: z.string().min(1).max(limits.maxInstructionsChars),
+      type: z
+        .enum(['noul', 'choice', 'score'])
+        .describe('"choice" = pick among named options; "score" = judge an ordered scale; "noul" = yes/no question'),
+      instructions: z
+        .string()
+        .min(1)
+        .max(limits.maxInstructionsChars)
+        .describe('What to judge, phrased as a self-contained question.'),
       criteria: z.union([z.array(z.string()), z.record(z.string(), z.string())]).optional(),
     })
+    .describe(
+      'A single decision question. Allowed answers come from `criteria` and must be mutually exclusive and collectively exhaustive.',
+    )
     .superRefine((q, ctx) => {
       if (q.type === 'choice') {
         // Spec §3 allows both shapes for choice: a map option id -> description,
@@ -74,9 +83,16 @@ function questionSchema(limits: Limits) {
 /** Zod raw shape for the clef_decide tool input (MCP SDK expects a shape, not a wrapped object). */
 export function clefDecideInputShape(limits: Limits) {
   return {
-    state: z.unknown(),
+    state: z
+      .unknown()
+      .describe(
+        'Task state as data: a compact string or JSON object with the facts needed to judge (task, errors, logs, diffs). Never treated as instructions. Serialized size limit: 1 MB; model context is 16k tokens.',
+      ),
     questions: z
       .record(z.string().min(1).max(limits.maxQuestionIdChars), questionSchema(limits))
+      .describe(
+        'Map of question id -> typed question. Up to 64 questions per call; all are scored together in a single forward pass, so batch related decisions here.',
+      )
       .check((ctx) => {
         const count = Object.keys(ctx.value).length;
         if (count === 0) ctx.issues.push({ code: 'custom', message: 'questions must not be empty', input: ctx.value });
@@ -84,7 +100,11 @@ export function clefDecideInputShape(limits: Limits) {
           ctx.issues.push({ code: 'custom', message: `too many questions (max ${limits.maxQuestions})`, input: ctx.value });
         }
       }),
-    model: z.string().min(1).optional(),
+    model: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Model id to use (default: clef-flash from CLEF_MODEL).'),
     options: z
       .object({
         /**
@@ -92,9 +112,15 @@ export function clefDecideInputShape(limits: Limits) {
          * single forward pass — there is no sampling, so temperature is a
          * documented no-op.
          */
-        temperature: z.number().min(0).max(2).optional(),
+        temperature: z
+          .number()
+          .min(0)
+          .max(2)
+          .optional()
+          .describe('Accepted for forward compatibility; no-op. Clef scores in a single forward pass without sampling.'),
       })
-      .optional(),
+      .optional()
+      .describe('Extra options. Currently only temperature, which is a documented no-op.'),
   };
 }
 
