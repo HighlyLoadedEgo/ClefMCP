@@ -6,16 +6,26 @@ function criteriaDescription(limits: Limits): z.ZodString {
   return z.string().min(1).max(limits.maxCriteriaDescChars);
 }
 
+function countIssues(count: number, limits: Limits): string | undefined {
+  if (count === 0) return 'criteria must not be empty';
+  if (count > limits.maxCriteriaPerQuestion) return `too many criteria (max ${limits.maxCriteriaPerQuestion})`;
+  return undefined;
+}
+
 function choiceCriteria(limits: Limits) {
-  return z
-    .record(z.string().min(1).max(limits.maxCriteriaDescChars), criteriaDescription(limits))
-    .check((ctx) => {
-      const count = Object.keys(ctx.value).length;
-      if (count === 0) ctx.issues.push({ code: 'custom', message: 'criteria must not be empty', input: ctx.value });
-      if (count > limits.maxCriteriaPerQuestion) {
-        ctx.issues.push({ code: 'custom', message: `too many criteria (max ${limits.maxCriteriaPerQuestion})`, input: ctx.value });
-      }
-    });
+  return z.union([
+    // Plain list: option ids equal to the strings themselves.
+    z.array(criteriaDescription(limits)).check((ctx) => {
+      const problem = countIssues(ctx.value.length, limits);
+      if (problem) ctx.issues.push({ code: 'custom', message: problem, input: ctx.value });
+    }),
+    z
+      .record(z.string().min(1).max(limits.maxCriteriaDescChars), criteriaDescription(limits))
+      .check((ctx) => {
+        const problem = countIssues(Object.keys(ctx.value).length, limits);
+        if (problem) ctx.issues.push({ code: 'custom', message: problem, input: ctx.value });
+      }),
+  ]);
 }
 
 function scoreCriteria(limits: Limits) {
@@ -38,11 +48,13 @@ function questionSchema(limits: Limits) {
     })
     .superRefine((q, ctx) => {
       if (q.type === 'choice') {
+        // Spec §3 allows both shapes for choice: a map option id -> description,
+        // or a plain list (ids equal to the strings). The adapter normalizes.
         const parsed = choiceCriteria(limits).safeParse(q.criteria);
         if (!parsed.success) {
           ctx.addIssue({
             code: 'custom',
-            message: `"choice" questions require non-empty criteria as a map of option id -> description (${parsed.error.issues[0]?.message ?? 'invalid criteria'})`,
+            message: `"choice" questions require non-empty criteria as a map of option id -> description, or a plain list of options (${parsed.error.issues[0]?.message ?? 'invalid criteria'})`,
           });
         }
       } else if (q.type === 'score') {

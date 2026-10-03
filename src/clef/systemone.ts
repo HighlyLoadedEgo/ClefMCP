@@ -58,7 +58,11 @@ export function toSystemOneRequest(input: ClefDecideInput, defaultModel: string)
   const questions: Record<string, SystemOneQuestion> = {};
   for (const [qid, q] of Object.entries(input.questions)) {
     const question: SystemOneQuestion = { type: q.type, instructions: q.instructions };
-    if (q.criteria !== undefined) question.criteria = q.criteria;
+    if (q.criteria !== undefined) {
+      // SystemOne expects choice criteria as a map; a plain list becomes id -> id.
+      question.criteria =
+        q.type === 'choice' && Array.isArray(q.criteria) ? Object.fromEntries(q.criteria.map((c) => [c, c])) : q.criteria;
+    }
     questions[qid] = question;
   }
   return {

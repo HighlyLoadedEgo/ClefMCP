@@ -29,6 +29,17 @@ describe('toSystemOneRequest', () => {
     expect(request.model).toBe('clef');
   });
 
+  it('converts plain-list choice criteria into an id -> id map for SystemOne', () => {
+    const request = toSystemOneRequest(
+      {
+        state: 's',
+        questions: { c: { type: 'choice', instructions: 'i', criteria: ['rollback', 'hotfix'] } },
+      },
+      'clef-flash',
+    );
+    expect(request.questions.c?.criteria).toEqual({ rollback: 'rollback', hotfix: 'hotfix' });
+  });
+
   it('keeps criteria and instructions in questions', () => {
     const request = toSystemOneRequest(
       {

@@ -104,7 +104,7 @@ Ready-made snippets live in [`examples/`](examples/).
 
 | Type | Criteria | Meaning |
 |------|----------|---------|
-| `choice` | map of `option id → description` | Pick among named options |
+| `choice` | map of `option id → description`, or a plain list of options (ids = the strings) | Pick among named options |
 | `score` | ordered list of descriptions | Ordered scale (index = score) |
 | `noul` | optional `{"true": "...", "false": "..."}` | Yes/no question |
 

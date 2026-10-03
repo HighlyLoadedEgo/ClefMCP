@@ -44,10 +44,15 @@ describe('clef_decide input schema', () => {
     expect(() => schema.parse({ state: 'x', questions })).toThrow(/too many questions/);
   });
 
-  it('rejects choice questions without record criteria', () => {
-    expect(() =>
-      schema.parse({ state: 'x', questions: { c: { type: 'choice', instructions: 'i', criteria: ['a'] } } }),
-    ).toThrow(/choice.*map/);
+  it('accepts choice criteria as a plain list (ids equal to the strings)', () => {
+    const parsed = schema.parse({
+      state: 'x',
+      questions: { c: { type: 'choice', instructions: 'i', criteria: ['rollback', 'hotfix'] } },
+    });
+    expect(parsed.questions.c?.criteria).toEqual(['rollback', 'hotfix']);
+  });
+
+  it('still rejects choice questions without record criteria', () => {
     expect(() => schema.parse({ state: 'x', questions: { c: { type: 'choice', instructions: 'i' } } })).toThrow(/choice/);
   });
 
