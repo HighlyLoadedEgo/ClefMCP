@@ -7,11 +7,15 @@ import { loadConfig, type ClefConfig } from '../config/env.js';
 import type { Logger } from '../config/logger.js';
 import { createLogger } from '../config/logger.js';
 import { findInstalledManifest } from '../models/manifest.js';
+import { mlxIsInstalled, resolveUv } from '../models/mlx-install.js';
 import { getModelSpec, type ModelSpec } from '../models/registry.js';
 import { resolveLlamaServerBinary } from '../runtime/binary.js';
 import { LlamaCppRuntime } from '../runtime/llama-cpp.js';
+import { MlxRuntime } from '../runtime/mlx.js';
 import type { ClefRuntime } from '../runtime/types.js';
 import { clefDecideInputSchema, clefDecideInputShape, clefDecideOutputSchema, validateStateSize } from './schema.js';
+import { registerPrompts } from './prompts.js';
+import { registerResources } from './resources.js';
 
 export const TOOL_NAME = 'clef_decide';
 
@@ -24,8 +28,15 @@ export interface ClefServerDeps {
   config?: ClefConfig;
   version?: string;
   log?: Logger;
-  /** Test seam: override runtime construction (defaults to LlamaCppRuntime). */
-  runtimeFactory?: (opts: { serverBin: string; modelPath: string; alias: string; log?: Logger }) => ClefRuntime;
+  /** Test seam: override runtime construction (defaults per config.runtime). */
+  runtimeFactory?: (opts: {
+    kind: 'llama-cpp' | 'mlx';
+    serverBin?: string;
+    modelPath?: string;
+    snapshotPath?: string;
+    alias: string;
+    log?: Logger;
+  }) => ClefRuntime;
 }
 
 export interface RunningClefServer {
@@ -41,8 +52,12 @@ interface LoadedRuntime {
 
 export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
   const config = deps.config ?? loadConfig();
+  const version = deps.version ?? '0.1.0';
   const log = deps.log ?? createLogger(config.logLevel);
-  const server = new McpServer({ name: 'clef-mcp', version: deps.version ?? '0.1.0' }, { instructions: SERVER_INSTRUCTIONS });
+  const server = new McpServer({ name: 'clef-mcp', version }, { instructions: SERVER_INSTRUCTIONS });
+
+  registerPrompts(server);
+  registerResources(server, config, version);
 
   let loaded: LoadedRuntime | undefined;
   let loadPromise: Promise<LoadedRuntime> | undefined;
@@ -56,6 +71,26 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
     if (loadPromise) return loadPromise;
 
     loadPromise = (async () => {
+      if (config.runtime === 'mlx') {
+        const manifest = await mlxIsInstalled(config.clefHome);
+        if (!manifest) {
+          throw new ClefError(
+            ClefErrorCode.MODEL_NOT_INSTALLED,
+            `Clef model "${spec.id}" is not installed for the MLX runtime.`,
+            'Run `clef-mcp install --runtime mlx`.',
+          );
+        }
+        const uvBin = resolveUv(process.env.CLEF_MLX_UV);
+        const runtime = deps.runtimeFactory
+          ? deps.runtimeFactory({ kind: 'mlx', snapshotPath: manifest.snapshotPath, alias: spec.id, log })
+          : new MlxRuntime({ uvBin, snapshotPath: manifest.snapshotPath, log });
+        log.debug('loading model (mlx)', { model: spec.id, snapshot: manifest.snapshotPath });
+        const loadStarted = Date.now();
+        await runtime.load();
+        log.info('model ready', { model: spec.id, runtime: 'mlx', loadMs: Date.now() - loadStarted });
+        return { runtime, model: spec.id };
+      }
+
       const manifest = await findInstalledManifest(config.clefHome, spec);
       if (!manifest) {
         throw new ClefError(
@@ -66,7 +101,7 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
       }
       const binary = resolveLlamaServerBinary(config);
       const runtime = deps.runtimeFactory
-        ? deps.runtimeFactory({ serverBin: binary.path, modelPath: manifest.modelPath, alias: spec.id, log })
+        ? deps.runtimeFactory({ kind: 'llama-cpp', serverBin: binary.path, modelPath: manifest.modelPath, alias: spec.id, log })
         : new LlamaCppRuntime({ serverBin: binary.path, modelPath: manifest.modelPath, alias: spec.id, log });
       log.debug('loading model', { model: spec.id, quant: manifest.quant, bin: binary.path });
       const loadStarted = Date.now();

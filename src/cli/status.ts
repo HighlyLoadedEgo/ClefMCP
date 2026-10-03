@@ -4,6 +4,7 @@ import { pathsFor } from '../config/paths.js';
 import { findInstalledManifest } from '../models/manifest.js';
 import { detectPlatform, formatBytes } from '../models/platform.js';
 import { getModelSpec } from '../models/registry.js';
+import { mlxIsInstalled, resolveUv } from '../models/mlx-install.js';
 import { resolveLlamaServerBinary } from '../runtime/binary.js';
 
 export async function runStatus(): Promise<void> {
@@ -15,13 +16,34 @@ export async function runStatus(): Promise<void> {
     spec = getModelSpec(config.model);
   } catch (err) {
     if (err instanceof ClefError && err.code === 'INVALID_INPUT') {
-      console.log(`Runtime: llama.cpp`);
+      console.log(`Runtime: ${config.runtime}`);
       console.log(`Model: ${config.model} (unknown model id)`);
       console.log('Model status: unknown');
       console.log(`Memory: ${formatBytes(info.totalMemBytes)}`);
       return;
     }
     throw err;
+  }
+
+  if (config.runtime === 'mlx') {
+    const mlx = await mlxIsInstalled(config.clefHome);
+    let uvLine = 'not found (install: curl -LsSf https://astral.sh/uv/install.sh | sh)';
+    try {
+      uvLine = `uv: ${resolveUv(process.env.CLEF_MLX_UV)}`;
+    } catch (err) {
+      uvLine = `not found — ${(err as Error).message.split('\n')[0]}`;
+    }
+    console.log(`Runtime: mlx (${uvLine})`);
+    console.log(`Model: ${spec.id}${mlx ? ' (MLX 4-bit)' : ''}`);
+    console.log(`Model status: ${mlx ? 'installed' : 'not installed (run: clef-mcp install --runtime mlx)'}`);
+    console.log(`Memory: ${formatBytes(info.totalMemBytes)}`);
+    if (mlx) {
+      console.log(`Snapshot: ${mlx.snapshotPath}`);
+      console.log(`Installed: ${mlx.installedAt}`);
+    } else {
+      console.log(`Cache home: ${pathsFor(config.clefHome).root}`);
+    }
+    return;
   }
 
   const manifest = await findInstalledManifest(config.clefHome, spec);

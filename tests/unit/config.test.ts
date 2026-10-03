@@ -28,8 +28,17 @@ describe('loadConfig', () => {
     expect(cfg.llamaReleaseTag).toBe('b11378');
   });
 
+  it('accepts both runtimes and suppresses llama overrides for mlx', () => {
+    const llama = loadConfig({ CLEF_RUNTIME: 'llama-cpp', CLEF_LLAMA_BIN: '/opt/llama-server' });
+    expect(llama.runtime).toBe('llama-cpp');
+    expect(llama.llamaBin).toBe('/opt/llama-server');
+    const mlx = loadConfig({ CLEF_RUNTIME: 'MLX', CLEF_LLAMA_BIN: '/opt/llama-server' });
+    expect(mlx.runtime).toBe('mlx');
+    expect(mlx.llamaBin).toBeUndefined();
+  });
+
   it('rejects unknown runtime ids', () => {
-    expect(() => loadConfig({ CLEF_RUNTIME: 'mlx' })).toThrow(/Unsupported CLEF_RUNTIME/);
+    expect(() => loadConfig({ CLEF_RUNTIME: 'tensorrt' })).toThrow(/Unsupported CLEF_RUNTIME/);
   });
 
   it('ignores blank env values', () => {

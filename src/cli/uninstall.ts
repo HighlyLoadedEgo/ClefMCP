@@ -6,6 +6,7 @@ import { findInstalledManifest } from '../models/manifest.js';
 import { formatBytes } from '../models/platform.js';
 import { getModelSpec } from '../models/registry.js';
 import { removeManagedRuntime } from '../models/llama-install.js';
+import { mlxIsInstalled, removeMlxModel } from '../models/mlx-install.js';
 import { confirm } from './prompt.js';
 
 export interface UninstallOptions {
@@ -17,8 +18,24 @@ export interface UninstallOptions {
 export async function runUninstall(opts: UninstallOptions): Promise<void> {
   const config = loadConfig();
   const spec = getModelSpec(opts.model ?? config.model);
-  const manifest = await findInstalledManifest(config.clefHome, spec);
   const { modelsDir } = pathsFor(config.clefHome);
+
+  if (config.runtime === 'mlx') {
+    const mlx = await mlxIsInstalled(config.clefHome);
+    if (!mlx) {
+      throw new ClefError(ClefErrorCode.MODEL_NOT_INSTALLED, 'The MLX model is not installed.', 'Nothing to remove.');
+    }
+    const ok = await confirm(`Remove the MLX snapshot for ${spec.id}?`, opts.yes === true);
+    if (!ok) {
+      console.log('Aborted.');
+      return;
+    }
+    await removeMlxModel(config.clefHome);
+    console.log('Removed MLX snapshot.');
+    return;
+  }
+
+  const manifest = await findInstalledManifest(config.clefHome, spec);
 
   if (!manifest && !opts.runtime) {
     throw new ClefError(

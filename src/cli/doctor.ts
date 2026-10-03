@@ -9,8 +9,9 @@ import { pathsFor } from '../config/paths.js';
 import { deepVerifyChecksum, findInstalledManifest, verifyModelFiles } from '../models/manifest.js';
 import { assertSupportedPlatform, detectPlatform, formatBytes } from '../models/platform.js';
 import { getModelSpec } from '../models/registry.js';
+import { mlxIsInstalled, resolveUv } from '../models/mlx-install.js';
 import { resolveLlamaServerBinary } from '../runtime/binary.js';
-import { probeInference } from '../runtime/probe.js';
+import { probeInference, probeMlxInference } from '../runtime/probe.js';
 
 const execFileP = promisify(execFile);
 
@@ -114,35 +115,77 @@ export async function runDoctor(opts: DoctorOptions): Promise<boolean> {
 
   // 4. Runtime binary
   let binaryPath: string | undefined;
-  try {
-    const binary = resolveLlamaServerBinary(config);
-    binaryPath = binary.path;
-    const version = await checkBinaryVersion(binary.path);
-    checks.push({
-      name: 'Runtime binary',
-      ok: version !== undefined,
-      detail: `${binary.source}: ${binary.path}${version ? ` (${version})` : ''}`,
-      hint: version === undefined ? 'The binary exists but did not answer --version; it may be broken or incompatible.' : undefined,
-    });
-  } catch (err) {
-    checks.push({
-      name: 'Runtime binary',
-      ok: false,
-      detail: err instanceof Error ? err.message : String(err),
-      hint: err instanceof ClefError ? err.hint : undefined,
-    });
+  if (config.runtime === 'mlx') {
+    try {
+      binaryPath = resolveUv(process.env.CLEF_MLX_UV);
+      checks.push({
+        name: 'Runtime (uv, for the MLX runtime)',
+        ok: true,
+        detail: binaryPath,
+      });
+    } catch (err) {
+      checks.push({
+        name: 'Runtime (uv, for the MLX runtime)',
+        ok: false,
+        detail: err instanceof Error ? err.message : String(err),
+        hint: 'Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh',
+      });
+    }
+  } else {
+    try {
+      const binary = resolveLlamaServerBinary(config);
+      binaryPath = binary.path;
+      const version = await checkBinaryVersion(binary.path);
+      checks.push({
+        name: 'Runtime binary',
+        ok: version !== undefined,
+        detail: `${binary.source}: ${binary.path}${version ? ` (${version})` : ''}`,
+        hint: version === undefined ? 'The binary exists but did not answer --version; it may be broken or incompatible.' : undefined,
+      });
+    } catch (err) {
+      binaryPath = undefined;
+      checks.push({
+        name: 'Runtime binary',
+        ok: false,
+        detail: err instanceof Error ? err.message : String(err),
+        hint: err instanceof ClefError ? err.hint : undefined,
+      });
+    }
   }
 
   // 5. Model
   let spec;
   let manifest;
+  let mlxManifest;
   try {
     spec = getModelSpec(config.model);
-    manifest = await findInstalledManifest(config.clefHome, spec);
+    if (config.runtime === 'mlx') mlxManifest = await mlxIsInstalled(config.clefHome);
+    else manifest = await findInstalledManifest(config.clefHome, spec);
   } catch {
     checks.push({ name: 'Model', ok: false, detail: `unknown model id "${config.model}"` });
   }
-  if (spec) {
+  if (config.runtime === 'mlx') {
+    if (!mlxManifest) {
+      checks.push({
+        name: 'Model',
+        ok: false,
+        detail: `${spec?.id ?? config.model} is not installed for the MLX runtime`,
+        hint: 'Run `clef-mcp install --runtime mlx`.',
+      });
+    } else {
+      checks.push({
+        name: 'Model',
+        ok: true,
+        detail: `MLX snapshot at ${mlxManifest.snapshotPath}`,
+      });
+      checks.push({
+        name: 'Model license',
+        ok: true,
+        informational: true,
+        detail: `${mlxManifest.licenseId} — ${mlxManifest.licenseUrl}`,
+      });
+    }
+  } else if (spec) {
     if (!manifest) {
       checks.push({
         name: 'Model',
@@ -177,7 +220,24 @@ export async function runDoctor(opts: DoctorOptions): Promise<boolean> {
   }
 
   // 6. Inference probe (end-to-end)
-  if (binaryPath && manifest && (await verifyModelFiles(manifest)).ok) {
+  if (config.runtime === 'mlx' && binaryPath && mlxManifest) {
+    try {
+      const probe = await probeMlxInference(config, mlxManifest, undefined, 240_000);
+      checks.push({
+        name: 'Inference',
+        ok: true,
+        detail: `probe decision returned in ${(probe.latencyMs / 1000).toFixed(1)}s (incl. model load)`,
+      });
+    } catch (err) {
+      const clefErr = err instanceof ClefError ? err : undefined;
+      checks.push({
+        name: 'Inference',
+        ok: false,
+        detail: clefErr?.message ?? (err instanceof Error ? err.message : String(err)),
+        hint: clefErr?.hint,
+      });
+    }
+  } else if (config.runtime === 'llama-cpp' && binaryPath && manifest && (await verifyModelFiles(manifest)).ok) {
     try {
       const probe = await probeInference(config, manifest, undefined, 180_000);
       checks.push({

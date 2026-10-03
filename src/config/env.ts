@@ -4,7 +4,9 @@ import { limitsFromEnv, type Limits } from './limits.js';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
-export type RuntimeId = 'llama-cpp';
+export type RuntimeId = 'llama-cpp' | 'mlx';
+
+export const SUPPORTED_RUNTIMES: readonly RuntimeId[] = ['llama-cpp', 'mlx'];
 
 export interface ClefConfig {
   /** Model id, e.g. "clef-flash". */
@@ -35,21 +37,20 @@ export function defaultClefHome(): string {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ClefConfig {
   const logLevel = parseLogLevel(env.CLEF_LOG_LEVEL) ?? 'error';
-  const runtime = env.CLEF_RUNTIME?.trim() || 'llama-cpp';
-  if (runtime !== 'llama-cpp') {
-    // Kept as a config-level guard; the CLI/MCP layers turn this into a
-    // structured RUNTIME_NOT_FOUND error when a runtime is actually needed.
-    throw new Error(`Unsupported CLEF_RUNTIME "${runtime}". Supported: llama-cpp`);
+  const runtimeRaw = (env.CLEF_RUNTIME?.trim() || 'llama-cpp').toLowerCase();
+  if (!(SUPPORTED_RUNTIMES as readonly string[]).includes(runtimeRaw)) {
+    throw new Error(`Unsupported CLEF_RUNTIME "${runtimeRaw}". Supported: ${SUPPORTED_RUNTIMES.join(', ')}`);
   }
+  const runtime = runtimeRaw as RuntimeId;
   const llamaBin = env.CLEF_LLAMA_BIN?.trim() || undefined;
   const llamaReleaseTag = env.CLEF_LLAMA_RELEASE_TAG?.trim() || undefined;
   return {
     model: env.CLEF_MODEL?.trim() || 'clef-flash',
     clefHome: env.CLEF_HOME?.trim() || defaultClefHome(),
-    runtime: 'llama-cpp',
+    runtime,
     logLevel,
-    llamaBin,
-    llamaReleaseTag,
+    llamaBin: runtime === 'llama-cpp' ? llamaBin : undefined,
+    llamaReleaseTag: runtime === 'llama-cpp' ? llamaReleaseTag : undefined,
     limits: limitsFromEnv(env),
   };
 }

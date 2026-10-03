@@ -1,0 +1,9 @@
+# Smithery configuration for clef-mcp (https://smithery.ai).
+# The server runs on stdio and needs no configuration values.
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties: {}
+  commandFunction: |-
+    (config) => ({ "command": "clef-mcp", "args": [] })

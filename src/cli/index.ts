@@ -47,6 +47,7 @@ program
   .option('-y, --yes', 'assume yes for all prompts (non-interactive)')
   .option('--skip-runtime', 'do not download/verify the llama.cpp runtime')
   .option('--skip-probe', 'skip the post-install inference verification')
+  .option('--runtime <id>', 'inference runtime: llama-cpp (default) | mlx (Apple Silicon)')
   .option('--setup', 'also register the MCP server + agent skill in detected clients (same as running `clef-mcp setup`)')
   .action(async (opts: InstallOptions) => {
     try {

@@ -68,6 +68,43 @@ describe('clef-mcp MCP server (stdio)', () => {
   );
 
   it(
+    'lists and returns bundled prompts',
+    async () => {
+      await withServer(install.env, async ({ client }) => {
+        const prompts = await client.listPrompts();
+        const names = prompts.prompts.map((p) => p.name).sort();
+        expect(names).toEqual(['incident-triage', 'next-action', 'security-review', 'ticket-routing']);
+
+        const got = await client.getPrompt({
+          name: 'incident-triage',
+          arguments: { incident_description: 'checkout 500s after deploy' },
+        });
+        const text = (got.messages[0]!.content as { type: string; text: string }).text;
+        expect(text).toContain('clef_decide');
+        expect(text).toContain('checkout 500s after deploy');
+      });
+    },
+  );
+
+  it(
+    'lists and reads bundled resources',
+    async () => {
+      await withServer(install.env, async ({ client }) => {
+        const resources = await client.listResources();
+        const uris = resources.resources.map((r) => r.uri).sort();
+        expect(uris).toEqual(['clef-mcp://capabilities', 'clef-mcp://evals/dataset', 'clef-mcp://evals/schema']);
+
+        const caps = await client.readResource({ uri: 'clef-mcp://capabilities' });
+        const capsText = (caps.contents[0] as { text: string }).text;
+        expect(JSON.parse(capsText)).toMatchObject({ name: 'clef-mcp', model: 'clef-flash', runtime: 'llama-cpp' });
+
+        const dataset = await client.readResource({ uri: 'clef-mcp://evals/dataset' });
+        expect((dataset.contents[0] as { text: string }).text).toContain('coding-inspect-first');
+      });
+    },
+  );
+
+  it(
     'returns structured probability distributions for all question types',
     async () => {
       await withServer(install.env, async ({ client }) => {

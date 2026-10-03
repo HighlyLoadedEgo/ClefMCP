@@ -8,9 +8,11 @@ import type { ClefQuestion } from '../clef/types.js';
 import { loadConfig } from '../config/env.js';
 import { createLogger } from '../config/logger.js';
 import { findInstalledManifest } from '../models/manifest.js';
+import { mlxIsInstalled, resolveUv } from '../models/mlx-install.js';
 import { getModelSpec } from '../models/registry.js';
 import { resolveLlamaServerBinary } from '../runtime/binary.js';
 import { LlamaCppRuntime } from '../runtime/llama-cpp.js';
+import { MlxRuntime } from '../runtime/mlx.js';
 
 export interface EvalsOptions {
   dataset?: string;
@@ -84,8 +86,19 @@ export async function runEvals(opts: EvalsOptions): Promise<boolean> {
   const config = loadConfig();
   const log = createLogger(config.logLevel);
   const spec = getModelSpec(config.model);
-  const manifest = await findInstalledManifest(config.clefHome, spec);
-  if (!manifest) {
+  let mlxManifest;
+  if (config.runtime === 'mlx') {
+    mlxManifest = await mlxIsInstalled(config.clefHome);
+    if (!mlxManifest) {
+      throw new ClefError(
+        ClefErrorCode.MODEL_NOT_INSTALLED,
+        `Model "${spec.id}" is not installed for the MLX runtime.`,
+        'Run `clef-mcp install --runtime mlx` first.',
+      );
+    }
+  }
+  const manifest = config.runtime === 'mlx' ? undefined : await findInstalledManifest(config.clefHome, spec);
+  if (!manifest && !mlxManifest) {
     throw new ClefError(
       ClefErrorCode.MODEL_NOT_INSTALLED,
       `Model "${spec.id}" is not installed; evals need the local model.`,
@@ -106,8 +119,12 @@ export async function runEvals(opts: EvalsOptions): Promise<boolean> {
   }
 
   const binary = resolveLlamaServerBinary(config);
-  const runtime = new LlamaCppRuntime({ serverBin: binary.path, modelPath: manifest.modelPath, alias: spec.id, log });
-  console.log(`Running ${cases.length} eval case(s) with ${spec.id} ${manifest.quant}...\n`);
+  const runtime =
+    config.runtime === 'mlx'
+      ? new MlxRuntime({ uvBin: resolveUv(process.env.CLEF_MLX_UV), snapshotPath: mlxManifest!.snapshotPath, log })
+      : new LlamaCppRuntime({ serverBin: binary.path, modelPath: manifest!.modelPath, alias: spec.id, log });
+  const runtimeLabel = config.runtime === 'mlx' ? 'MLX' : manifest!.quant;
+  console.log(`Running ${cases.length} eval case(s) with ${spec.id} ${runtimeLabel}...\n`);
   await runtime.load();
 
   let passed = 0;

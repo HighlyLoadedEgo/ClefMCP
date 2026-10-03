@@ -96,6 +96,25 @@ Response — strictly structured, never prose:
 
 Batch up to **64 questions per call** — they are scored in one forward pass. `state` is treated strictly as **data**: never executed, never interpreted as instructions for the server.
 
+## Prompts & resources
+
+The server ships four MCP **prompts** (canned, decision-shaped asks — your client lists them via `prompts/list`):
+
+| Prompt | Purpose |
+|---|---|
+| `incident-triage` | action + severity + user-impact questions for a production incident |
+| `next-action` | what the coding agent should do next + confidence |
+| `ticket-routing` | classify a message into a team + urgency |
+| `security-review` | vulnerability yes/no, risk scale, first mitigation |
+
+And three **resources** (read-only, no model needed):
+
+| URI | Contents |
+|---|---|
+| `clef-mcp://capabilities` | live JSON: model, runtime, limits, error codes |
+| `clef-mcp://evals/schema` | how to write eval cases |
+| `clef-mcp://evals/dataset` | the bundled 30-case dataset |
+
 ## Measured, not marketed
 
 Apple M4 Pro, Clef-Flash Q4_K_M (6 GB), single request through the full MCP stdio path:
@@ -202,17 +221,31 @@ clef-mcp evals        # run the evaluation dataset against the installed model
 
 Flags: `install --quant Q8_0 --yes --skip-probe`, `install --setup`, `setup --clients zcode,cursor --no-skill`, `doctor --deep` (re-hash the model file), `uninstall --runtime --yes`.
 
+## Runtimes: llama.cpp and MLX
+
+Two local runtimes behind the same `ClefRuntime` interface:
+
+| | `llama-cpp` (default) | `mlx` |
+|---|---|---|
+| Platforms | macOS, Linux, Windows | macOS / Apple Silicon only |
+| Model | GGUF from `ggml-org/Clef-Flash-GGUF` | MLX 4-bit from `mlx-community/clef-flash-4bit` |
+| Extras | none | [uv](https://docs.astral.sh/uv/) on PATH (managed Python env) |
+| Install | `clef-mcp install` | `clef-mcp install --runtime mlx` |
+
+Switch at runtime with `CLEF_RUNTIME=mlx` (must be set for the MCP server process — e.g. in the client's `env` block). Both speak the same `POST /v1/systemone` contract. The MLX snapshot is fetched into `CLEF_HOME` via a uv-managed `huggingface_hub` (no global Python state) at a pinned revision.
+
 ## Configuration
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `CLEF_MODEL` | `clef-flash` | Model id (per-call `model` also accepted) |
 | `CLEF_HOME` | `~/.cache/clef-mcp` | Cache/model home |
-| `CLEF_RUNTIME` | `llama-cpp` | Inference runtime (v0.1: only llama-cpp) |
+| `CLEF_RUNTIME` | `llama-cpp` | `llama-cpp` \| `mlx` |
 | `CLEF_LOG_LEVEL` | `error` | `error` \| `warn` \| `info` \| `debug` (stderr only) |
-| `CLEF_LLAMA_BIN` | – | Explicit `llama-server` binary path |
+| `CLEF_LLAMA_BIN` | – | Explicit `llama-server` binary path (llama-cpp runtime) |
 | `CLEF_LLAMA_RELEASE_TAG` | latest nightly | Pin the managed llama.cpp build |
 | `CLEF_LLAMA_BATCH` | `8192` | llama.cpp physical batch (multi-question requests) |
+| `CLEF_MLX_UV` | `uv` on PATH | Explicit uv binary (MLX runtime) |
 | `CLEF_MAX_QUESTIONS` | `64` | Max questions per call |
 | `CLEF_MAX_STATE_BYTES` | `1048576` | Max serialized `state` size |
 | `CLEF_MAX_INSTRUCTION_CHARS` | `10000` | Max chars per question instructions |
