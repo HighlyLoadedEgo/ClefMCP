@@ -24,6 +24,7 @@
   "files": [
     "dist",
     "skills",
+    "assets",
     "tests/evals",
     "README.md",
     "NOTICE",
