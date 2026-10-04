@@ -20,6 +20,8 @@ export interface ClefConfig {
   llamaBin?: string;
   /** Pin the llama.cpp release tag used by the managed runtime download. */
   llamaReleaseTag?: string;
+  /** Daemon: unload the model after this many idle seconds (CLEF_DAEMON_IDLE, 0 = never). */
+  daemonIdleSeconds: number;
   limits: Limits;
 }
 
@@ -44,6 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ClefConfig {
   const runtime = runtimeRaw as RuntimeId;
   const llamaBin = env.CLEF_LLAMA_BIN?.trim() || undefined;
   const llamaReleaseTag = env.CLEF_LLAMA_RELEASE_TAG?.trim() || undefined;
+  const idleRaw = Number.parseInt(env.CLEF_DAEMON_IDLE?.trim() ?? '', 10);
   return {
     model: env.CLEF_MODEL?.trim() || 'clef-flash',
     clefHome: env.CLEF_HOME?.trim() || defaultClefHome(),
@@ -51,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ClefConfig {
     logLevel,
     llamaBin: runtime === 'llama-cpp' ? llamaBin : undefined,
     llamaReleaseTag: runtime === 'llama-cpp' ? llamaReleaseTag : undefined,
+    daemonIdleSeconds: Number.isFinite(idleRaw) && idleRaw >= 0 ? idleRaw : 600,
     limits: limitsFromEnv(env),
   };
 }

@@ -7,6 +7,8 @@ import { createLogger } from '../config/logger.js';
 import { getModelSpec } from '../models/registry.js';
 import { clefDecideInputSchema, validateStateSize } from '../mcp/schema.js';
 import { RuntimeLoader } from '../runtime/loader.js';
+import { daemonSocketPath } from '../daemon/daemon.js';
+import { decideViaDaemon } from '../daemon/client.js';
 
 export interface DecideOptions {
   /** Path to a state file, "-" for stdin, or an inline JSON/text value. */
@@ -14,6 +16,8 @@ export interface DecideOptions {
   /** Path to a JSON file with the questions map ("-" for stdin). */
   questions?: string;
   model?: string;
+  /** Route the request through a running `clef-mcp daemon` (falls back to a cold run). */
+  daemon?: boolean;
 }
 
 function invalid(message: string, hint?: string): ClefError {
@@ -100,9 +104,48 @@ export async function runDecide(opts: DecideOptions): Promise<void> {
     if (typeof record.model === 'string') model = record.model;
   }
 
+  const doc = { state, questions, ...(model ? { model } : {}) };
+
+  if (opts.daemon) {
+    const answered = await tryDaemon(config, doc);
+    if (answered) {
+      await new Promise<void>((resolve) => process.stdout.write(`${JSON.stringify(answered)}\n`, resolve));
+      return;
+    }
+  }
+
+  const parsed = validateDoc(config, doc);
+  const spec = getModelSpec(parsed.model ?? config.model);
+  const loader = new RuntimeLoader(config, log);
+  try {
+    const request = toSystemOneRequest({ state: parsed.state, questions: parsed.questions, model: spec.id }, spec.id);
+    const { runtime } = await loader.ensure(spec);
+    const response = await runtime.decide(request);
+    const output = fromSystemOneResponse(response, parsed.questions, spec.id);
+    await new Promise<void>((resolve) => process.stdout.write(`${JSON.stringify(output)}\n`, resolve));
+  } finally {
+    await loader.dispose();
+  }
+}
+
+/** Try the local daemon; undefined means "not reachable, fall back to a cold run". */
+async function tryDaemon(config: ReturnType<typeof loadConfig>, doc: unknown): Promise<Record<string, unknown> | undefined> {
+  const result = await decideViaDaemon(daemonSocketPath(config.clefHome), doc);
+  if (result === undefined) {
+    process.stderr.write('clef-mcp decide: no daemon reachable; running a cold decision\n');
+    return undefined;
+  }
+  if (result.error && typeof result.error === 'object') {
+    const e = result.error as { code: string; message: string; hint?: string };
+    throw new ClefError(e.code as ClefErrorCode, e.message, e.hint);
+  }
+  return result;
+}
+
+function validateDoc(config: ReturnType<typeof loadConfig>, doc: { state: unknown; questions: unknown; model?: string }) {
   let parsed: ReturnType<typeof clefDecideInputSchema>;
   try {
-    parsed = clefDecideInputSchema(config.limits).parse({ state, questions, ...(model ? { model } : {}) });
+    parsed = clefDecideInputSchema(config.limits).parse(doc);
   } catch (err) {
     // CLI callers (hooks, scripts) need the structured INVALID_INPUT code, not a raw ZodError.
     if (err instanceof ZodError) {
@@ -116,16 +159,5 @@ export async function runDecide(opts: DecideOptions): Promise<void> {
     throw err;
   }
   validateStateSize(parsed.state, config.limits);
-
-  const spec = getModelSpec(parsed.model ?? config.model);
-  const loader = new RuntimeLoader(config, log);
-  try {
-    const request = toSystemOneRequest({ state: parsed.state, questions: parsed.questions, model: spec.id }, spec.id);
-    const { runtime } = await loader.ensure(spec);
-    const response = await runtime.decide(request);
-    const output = fromSystemOneResponse(response, parsed.questions, spec.id);
-    await new Promise<void>((resolve) => process.stdout.write(`${JSON.stringify(output)}\n`, resolve));
-  } finally {
-    await loader.dispose();
-  }
+  return parsed;
 }

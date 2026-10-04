@@ -2,6 +2,8 @@
 import { ClefError, errorJson, exitCodeFor } from '../clef/errors.js';
 import { createClefServer } from '../mcp/server.js';
 import { loadConfig } from '../config/env.js';
+import { createLogger } from '../config/logger.js';
+import { startDaemon } from '../daemon/daemon.js';
 import { Command } from 'commander';
 import { runDecide, type DecideOptions } from './decide.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
@@ -46,10 +48,26 @@ program
   .option('--state <source>', 'state: file path, "-" for stdin, or inline JSON/text')
   .option('--questions <source>', 'questions map: file path, "-" for stdin, or inline JSON')
   .option('--model <id>', 'model to use (default: CLEF_MODEL or clef-flash)')
+  .option('--daemon', 'route through a running `clef-mcp daemon` (falls back to a cold run when none is reachable)')
   .action(async (opts: DecideOptions) => {
     try {
       await runDecide(opts);
       process.exit(0);
+    } catch (err) {
+      handleCliError(err);
+    }
+  });
+
+program
+  .command('daemon')
+  .description('Keep the model warm and answer decide requests on a local unix socket in CLEF_HOME (used by decide --daemon).')
+  .action(async () => {
+    try {
+      const config = loadConfig();
+      const log = createLogger(config.logLevel);
+      const daemon = startDaemon(config, log);
+      await daemon.ready;
+      // The socket server keeps the process alive; nothing else to do here.
     } catch (err) {
       handleCliError(err);
     }

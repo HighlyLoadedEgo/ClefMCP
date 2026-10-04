@@ -225,11 +225,18 @@ describe('clef-mcp MCP server (stdio)', () => {
       const handle = await startServer(install.env);
       handles.push(handle);
       await handle.client.callTool({ name: 'clef_decide', arguments: sampleDecideArgs() });
-      const listPids = async () =>
-        (await execFileP('pgrep', ['-f', 'fake-llama-server.mjs']).catch(() => ({ stdout: '' }))).stdout
-          .split('\n')
-          .map((s) => s.trim())
-          .filter(Boolean);
+      const listPids = async () => {
+        const { stdout } = await execFileP('pgrep', ['-f', 'fake-llama-server.mjs']).catch(() => ({ stdout: '' }));
+        const pids = stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+        // Scope to this install: other test files (e.g. the daemon tests) keep
+        // their own long-lived fake servers, which are not leaks of ours.
+        const scoped: string[] = [];
+        for (const pid of pids) {
+          const { stdout: cmd } = await execFileP('ps', ['-p', pid, '-o', 'command=']).catch(() => ({ stdout: '' }));
+          if (cmd.includes(install.clefHome)) scoped.push(pid);
+        }
+        return scoped;
+      };
       const pidsBefore = await listPids();
       expect(pidsBefore.length).toBeGreaterThan(0);
       await handle.stop();
