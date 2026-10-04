@@ -135,6 +135,9 @@ export function clefDecideInputSchema(limits: Limits) {
   return z.object(clefDecideInputShape(limits));
 }
 
+/** The validated clef_decide document (zod output, shared by MCP server, CLI and daemon). */
+export type ClefDecideValidated = z.output<ReturnType<typeof clefDecideInputSchema>>;
+
 /** Output schema mirrored by the MCP tool result (structuredContent). */
 export function clefDecideOutputSchema() {
   return z.object({

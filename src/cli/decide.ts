@@ -5,7 +5,7 @@ import { fromSystemOneResponse, toSystemOneRequest } from '../clef/systemone.js'
 import { loadConfig } from '../config/env.js';
 import { createLogger } from '../config/logger.js';
 import { getModelSpec } from '../models/registry.js';
-import { clefDecideInputSchema, validateStateSize } from '../mcp/schema.js';
+import { clefDecideInputSchema, validateStateSize, type ClefDecideValidated } from '../mcp/schema.js';
 import { RuntimeLoader } from '../runtime/loader.js';
 import { daemonSocketPath } from '../daemon/daemon.js';
 import { decideViaDaemon } from '../daemon/client.js';
@@ -109,7 +109,9 @@ export async function runDecide(opts: DecideOptions): Promise<void> {
   if (opts.daemon) {
     const answered = await tryDaemon(config, doc);
     if (answered) {
-      await new Promise<void>((resolve) => process.stdout.write(`${JSON.stringify(answered)}\n`, resolve));
+      await new Promise<void>((resolve, reject) =>
+        process.stdout.write(`${JSON.stringify(answered)}\n`, (err) => (err ? reject(err) : resolve())),
+      );
       return;
     }
   }
@@ -122,7 +124,9 @@ export async function runDecide(opts: DecideOptions): Promise<void> {
     const { runtime } = await loader.ensure(spec);
     const response = await runtime.decide(request);
     const output = fromSystemOneResponse(response, parsed.questions, spec.id);
-    await new Promise<void>((resolve) => process.stdout.write(`${JSON.stringify(output)}\n`, resolve));
+    await new Promise<void>((resolve, reject) =>
+      process.stdout.write(`${JSON.stringify(output)}\n`, (err) => (err ? reject(err) : resolve())),
+    );
   } finally {
     await loader.dispose();
   }
@@ -143,7 +147,7 @@ async function tryDaemon(config: ReturnType<typeof loadConfig>, doc: unknown): P
 }
 
 function validateDoc(config: ReturnType<typeof loadConfig>, doc: { state: unknown; questions: unknown; model?: string }) {
-  let parsed: ReturnType<typeof clefDecideInputSchema>;
+  let parsed: ClefDecideValidated;
   try {
     parsed = clefDecideInputSchema(config.limits).parse(doc);
   } catch (err) {

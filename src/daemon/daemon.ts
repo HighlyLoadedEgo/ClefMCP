@@ -6,7 +6,7 @@ import { fromSystemOneResponse, toSystemOneRequest } from '../clef/systemone.js'
 import type { ClefConfig } from '../config/env.js';
 import type { Logger } from '../config/logger.js';
 import { getModelSpec } from '../models/registry.js';
-import { clefDecideInputSchema, validateStateSize } from '../mcp/schema.js';
+import { clefDecideInputSchema, validateStateSize, type ClefDecideValidated } from '../mcp/schema.js';
 import { RuntimeLoader } from '../runtime/loader.js';
 
 export function daemonSocketPath(clefHome: string): string {
@@ -143,7 +143,7 @@ export function startDaemon(config: ClefConfig, log: Logger): RunningDaemon {
   }
 
   async function decideOnce(request: DaemonRequest): Promise<Record<string, unknown>> {
-    let parsed: ReturnType<typeof clefDecideInputSchema>;
+    let parsed: ClefDecideValidated;
     try {
       parsed = clefDecideInputSchema(config.limits).parse({ state: request.state, questions: request.questions, ...(typeof request.model === 'string' ? { model: request.model } : {}) });
     } catch (err) {

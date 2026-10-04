@@ -36,7 +36,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "npm run build && vitest run",
+    "test": "npm run build && tsc --noEmit && vitest run",
     "test:watch": "vitest",
     "evals": "npm run build && node dist/cli.js evals",
     "prepack": "npm run build"
