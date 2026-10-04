@@ -194,7 +194,9 @@ echo '{"state": "checkout 500s after deploy", "questions": {"is_outage": {"type"
 clef-mcp decide --questions questions.json --state state.json
 ```
 
-stdout carries the strict JSON result (same shape as the MCP tool, including `confidence` and `usage`); errors go to stderr as structured JSON with exit codes: `2` invalid input, `3` model not installed, `4` runtime missing. `decide` never downloads anything. Each invocation is a cold start (model load included, a few seconds) — fine for gates and triage, too slow for hot loops. See [`examples/`](examples/) for a PreToolUse guard and a GitHub Action recipe.
+stdout carries the strict JSON result (same shape as the MCP tool, including `confidence` and `usage`); errors go to stderr as structured JSON with exit codes: `2` invalid input, `3` model not installed, `4` runtime missing. `decide` never downloads anything.
+
+Each plain `decide` invocation is a cold start (model load included, a few seconds) — fine for gates and triage. For repeated calls, start `clef-mcp daemon` once: it keeps the model warm on a permission-scoped unix socket in `CLEF_HOME` (no TCP port, unloads after `CLEF_DAEMON_IDLE` seconds, default 600), and `clef-mcp decide --daemon` answers in well under a second, falling back to a cold run when no daemon is running. See [`examples/hooks/`](examples/hooks/) for a PreToolUse guard and a GitHub Action recipe.
 
 ## Teach your agent (skill)
 
@@ -229,6 +231,7 @@ The `ClefRuntime` interface (`load / decide / unload / health`) isolates the eng
 ```bash
 clef-mcp              # run the MCP server on stdio (default command)
 clef-mcp decide       # one-shot decision (no MCP session): JSON in, JSON out — for hooks, CI, scripts
+clef-mcp daemon       # keep the model warm on a local unix socket; `decide --daemon` uses it
 clef-mcp install      # detect hardware → download model + runtime → verify checksum → verify inference
 clef-mcp setup        # register the MCP server + agent skill in zcode / claude-code / codex / cursor
 clef-mcp models       # list models/quantizations and install status
@@ -265,6 +268,7 @@ Switch at runtime with `CLEF_RUNTIME=mlx` (must be set for the MCP server proces
 | `CLEF_LLAMA_RELEASE_TAG` | latest nightly | Pin the managed llama.cpp build |
 | `CLEF_LLAMA_BATCH` | `8192` | llama.cpp physical batch (multi-question requests) |
 | `CLEF_MLX_UV` | `uv` on PATH | Explicit uv binary (MLX runtime) |
+| `CLEF_DAEMON_IDLE` | `600` | Seconds of idle before the daemon unloads the model (0 = never) |
 | `CLEF_MAX_QUESTIONS` | `64` | Max questions per call |
 | `CLEF_MAX_STATE_BYTES` | `1048576` | Max serialized `state` size |
 | `CLEF_MAX_INSTRUCTION_CHARS` | `10000` | Max chars per question instructions |

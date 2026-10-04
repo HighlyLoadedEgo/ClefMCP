@@ -1,6 +1,6 @@
 {
   "name": "clef-mcp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "mcpName": "io.github.HighlyLoadedEgo/clef-mcp",
   "description": "Local MCP server exposing the Clef decision model as a structured clef_decide tool.",
   "type": "module",
@@ -24,6 +24,7 @@
   "files": [
     "dist",
     "skills",
+    "examples",
     "assets",
     "tests/evals",
     "README.md",

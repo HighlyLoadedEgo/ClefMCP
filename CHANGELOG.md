@@ -3,6 +3,19 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] — 2026-10-04
+
+### Added
+- **`clef-mcp decide`** — one-shot decision CLI for hooks, CI and scripts: reads `{state, questions, model?}` from stdin or `--questions`/`--state` files (inline values accepted), validates with the same schema and limits as the MCP tool, prints strict JSON to stdout; errors structured on stderr with exit codes (2 invalid input, 3 model not installed, 4 runtime missing). Never downloads anything.
+- **`clef-mcp daemon`** — keeps the model warm on a permission-scoped unix socket in `CLEF_HOME` (no TCP port); `clef-mcp decide --daemon` answers in well under a second and falls back to a cold run when no daemon is reachable. Model unloads after `CLEF_DAEMON_IDLE` seconds (default 600, `0` = never).
+- **Model confidence + token usage in results**: every decision now carries the model-reported `confidence` (when the runtime sends it) and the response carries `usage` (`input_tokens`/`output_tokens`/`latency_ms`, with `prompt_tokens`/`completion_tokens` aliases canonicalized) — both in the MCP tool result and the CLI output, so the "act only when p ≥ 0.8" rule is checkable.
+- **Automation recipes** in `examples/hooks/`: a PreToolUse guard that blocks shell commands the model judges destructive (p ≥ 0.9, fails open), and a GitHub Action that triages PR diffs into severity/area.
+
+### Changed
+- Runtime resolution (manifest → binary → runtime, lazy load, factory test seam) extracted from the MCP server into a shared `RuntimeLoader`; server, `decide` and `daemon` exercise the identical chain.
+- `clef-decisions` skill: new "When NOT to call it" section (skip when the answer is known, when the task needs generation/reasoning, when re-asking without new facts), confidence-based thresholds, state-size vs latency guidance.
+- Tool description documents the new `confidence`/`usage` fields and the decisive-argmax rule.
+
 ## [0.2.0] — 2026-10-03
 
 ### Added
