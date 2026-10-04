@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- `clef_decide` tool description tightened after a TDQS re-evaluation dropped conciseness to 4/5: the temperature no-op is now stated only in the schema (was duplicated in prose), and the confidence/usage + threshold guidance is compressed to two lines.
 - PreToolUse guard recipe, hardened after its first real firing (2026-10-04):
   - the pre-filter is semantic about history-rewriting pushes — `--force` (incl. `--force-with-lease`), `-f`, the `+refspec` form, and `git filter-repo`/`filter-branch` all reach the model; previously a literal `push --force` match alone was bypassed by re-running the same push as a `+refspec`;
   - the block message now routes the agent to the user ("ask the user to confirm explicitly") instead of hinting at a re-run without the guard;
