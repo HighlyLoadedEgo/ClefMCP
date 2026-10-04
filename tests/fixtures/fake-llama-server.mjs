@@ -92,7 +92,8 @@ const server = http.createServer((req, res) => {
         JSON.stringify({
           model: request.model ?? 'clef-flash',
           answers,
-          usage: { prompt_tokens: 42, latency_ms: 3 },
+          // Live llama.cpp /v1/systemone usage shape (verified end-to-end).
+          usage: { input_tokens: 42, output_tokens: 0, latency_ms: 3 },
         }),
       );
     });

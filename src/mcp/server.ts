@@ -129,8 +129,10 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
         '- "score": judge an ordered scale (criteria = ordered list of levels)\n' +
         '- "noul": yes/no question\n' +
         'Returns strict JSON — a probability distribution over the allowed answers for every question. No prose, no sampling.\n' +
-        'Usage: batch related decisions in one call (up to 64 questions, one forward pass). Act on the argmax when the ' +
-        'distribution is decisive (p >= 0.8 for destructive or security-adjacent calls); otherwise gather more context or ask the user.\n' +
+        'Each decision also carries `confidence` (model-reported, when available) and the response carries `usage`\n' +
+        '(input_tokens/output_tokens/latency_ms). Act on the argmax only when the distribution is decisive (top p >= 0.8\n' +
+        'and high confidence for destructive or security-adjacent calls); otherwise gather more context or ask the user.\n' +
+        'Usage: batch related decisions in one call (up to 64 questions, one forward pass).\n' +
         'Optional `model` overrides the model id. `options.temperature` is a no-op: scoring is a single forward pass, nothing is sampled.',
       inputSchema: clefDecideInputShape(config.limits),
       outputSchema: clefDecideOutputSchema().shape,

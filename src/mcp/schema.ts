@@ -139,7 +139,22 @@ export function clefDecideInputSchema(limits: Limits) {
 export function clefDecideOutputSchema() {
   return z.object({
     model: z.string(),
-    decisions: z.record(z.string(), z.object({ answer: z.record(z.string(), z.number()) })),
+    decisions: z.record(
+      z.string(),
+      z.object({
+        answer: z.record(z.string(), z.number()),
+        // Model-reported confidence; present only when the runtime sends it.
+        confidence: z.number().min(0).max(1).optional(),
+      }),
+    ),
+    // Token usage / latency; present only when the runtime reports it.
+    usage: z
+      .object({
+        input_tokens: z.number().optional(),
+        output_tokens: z.number().optional(),
+        latency_ms: z.number().optional(),
+      })
+      .optional(),
   });
 }
 

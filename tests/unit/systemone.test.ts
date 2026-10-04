@@ -203,4 +203,65 @@ describe('fromSystemOneResponse', () => {
   it('throws when the answers object itself is missing', () => {
     expect(() => fromSystemOneResponse({} as never, choiceQ, 'clef-flash')).toThrow(/answers/);
   });
+
+  it('passes through model-reported confidence per decision', () => {
+    const out = fromSystemOneResponse(
+      { answers: { next_action: { probabilities: { inspect: 0.7, modify: 0.3 }, confidence: 0.55 } } },
+      choiceQ,
+      'clef-flash',
+    );
+    expect(out.decisions.next_action).toEqual({ answer: { inspect: 0.7, modify: 0.3 }, confidence: 0.55 });
+  });
+
+  it('omits confidence when the runtime does not report it (e.g. noul)', () => {
+    const out = fromSystemOneResponse(
+      { answers: { q: { type: 'noul', noul: 0.87 } } },
+      { q: { type: 'noul', instructions: 'i' } },
+      'clef-flash',
+    );
+    expect(out.decisions.q).toEqual({ answer: { true: 0.87, false: 0.13 } });
+    expect(out.usage).toBeUndefined();
+  });
+
+  it('ignores non-numeric confidence values', () => {
+    const out = fromSystemOneResponse(
+      { answers: { next_action: { probabilities: { inspect: 1, modify: 0 }, confidence: 'high' } } },
+      choiceQ,
+      'clef-flash',
+    );
+    expect(out.decisions.next_action).toEqual({ answer: { inspect: 1, modify: 0 } });
+  });
+
+  it('canonicalizes usage aliases (prompt_tokens/completion_tokens) and latency', () => {
+    const out = fromSystemOneResponse(
+      {
+        answers: { next_action: { probabilities: { inspect: 1, modify: 0 } } },
+        usage: { prompt_tokens: 10, completion_tokens: 0, latency_ms: 5 },
+      },
+      choiceQ,
+      'clef-flash',
+    );
+    expect(out.usage).toEqual({ input_tokens: 10, output_tokens: 0, latency_ms: 5 });
+  });
+
+  it('keeps the live llama.cpp usage shape as-is', () => {
+    const out = fromSystemOneResponse(
+      {
+        answers: { next_action: { probabilities: { inspect: 1, modify: 0 } } },
+        usage: { input_tokens: 228, output_tokens: 0 },
+      },
+      choiceQ,
+      'clef-flash',
+    );
+    expect(out.usage).toEqual({ input_tokens: 228, output_tokens: 0 });
+  });
+
+  it('drops usage when nothing numeric survives normalization', () => {
+    const out = fromSystemOneResponse(
+      { answers: { next_action: { probabilities: { inspect: 1, modify: 0 } } }, usage: { weird: 'x' } },
+      choiceQ,
+      'clef-flash',
+    );
+    expect(out.usage).toBeUndefined();
+  });
 });

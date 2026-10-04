@@ -112,20 +112,29 @@ describe('clef-mcp MCP server (stdio)', () => {
         expect(result.isError).toBeFalsy();
         const structured = result.structuredContent as {
           model: string;
-          decisions: Record<string, { answer: Record<string, number> }>;
+          decisions: Record<string, { answer: Record<string, number>; confidence?: number }>;
+          usage?: { input_tokens?: number; output_tokens?: number; latency_ms?: number };
         };
         expect(structured.model).toBe('clef-flash');
 
         const choice = structured.decisions.next_action?.answer;
         expect(Object.keys(choice ?? {})).toHaveLength(4);
         expect(Object.values(choice ?? {}).reduce((s, p) => s + p, 0)).toBeCloseTo(1, 5);
+        // The fake llama-server reports confidence for choice/score answers.
+        expect(structured.decisions.next_action?.confidence).toBeCloseTo(0.6, 5);
 
         const score = structured.decisions.confidence?.answer;
         expect(Object.keys(score ?? {})).toEqual(['very_low', 'low', 'medium', 'high', 'very_high']);
+        expect(structured.decisions.confidence?.confidence).toBeCloseTo(0.5, 5);
 
+        // The fake mirrors the live llama.cpp shape, which omits confidence for noul.
         const noul = structured.decisions.outage?.answer;
         expect(noul?.true).toBeCloseTo(0.87, 5);
         expect(noul?.false).toBeCloseTo(0.13, 5);
+        expect(structured.decisions.outage?.confidence).toBeUndefined();
+
+        // Token usage / latency pass through when the runtime reports them.
+        expect(structured.usage).toEqual({ input_tokens: 42, output_tokens: 0, latency_ms: 3 });
 
         // The text content mirrors the structured JSON.
         const text = (result.content as Array<{ type: string; text: string }>)[0]?.text;

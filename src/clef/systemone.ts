@@ -1,5 +1,5 @@
 import { ClefError, ClefErrorCode } from './errors.js';
-import type { ClefDecideInput, ClefDecideOutput, ClefQuestion } from './types.js';
+import type { ClefDecideInput, ClefDecideOutput, ClefQuestion, ClefUsage } from './types.js';
 
 /**
  * Wire-level types for the SystemOne API (`POST /v1/systemone`), the de-facto
@@ -196,6 +196,32 @@ function normalizeChoice(ans: SystemOneAnswer, qid: string): Record<string, numb
   return probabilitiesMap(ans, qid);
 }
 
+/**
+ * Model-reported per-question confidence (llama.cpp sends it for choice/score,
+ * not for noul). Included only when the runtime reports a finite number.
+ */
+function confidenceOf(ans: SystemOneAnswer): number | undefined {
+  return typeof ans.confidence === 'number' && Number.isFinite(ans.confidence) ? ans.confidence : undefined;
+}
+
+/**
+ * Canonicalize the usage report. Runtimes disagree on key names (llama.cpp
+ * systemone: input_tokens/output_tokens; OpenAI-style servers: prompt_tokens/
+ * completion_tokens; the MLX loader adds latency_ms), so accept the aliases.
+ */
+function normalizeUsage(usage: SystemOneUsage | undefined): ClefUsage | undefined {
+  if (!usage || typeof usage !== 'object') return undefined;
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  const out: ClefUsage = {};
+  const input = num(usage.input_tokens) ?? num(usage.prompt_tokens);
+  const output = num(usage.output_tokens) ?? num(usage.completion_tokens);
+  const latency = num(usage.latency_ms);
+  if (input !== undefined) out.input_tokens = input;
+  if (output !== undefined) out.output_tokens = output;
+  if (latency !== undefined) out.latency_ms = latency;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Normalize a SystemOne response into the strict clef_decide output shape. */
 export function fromSystemOneResponse(
   response: SystemOneResponse,
@@ -221,7 +247,11 @@ export function fromSystemOneResponse(
         answer = normalizeScore(ans, qid, question);
         break;
     }
-    decisions[qid] = { answer };
+    const confidence = confidenceOf(ans);
+    decisions[qid] = confidence === undefined ? { answer } : { answer, confidence };
   }
-  return { model: response.model ?? fallbackModel, decisions };
+  const usage = normalizeUsage(response.usage);
+  return usage === undefined
+    ? { model: response.model ?? fallbackModel, decisions }
+    : { model: response.model ?? fallbackModel, decisions, usage };
 }

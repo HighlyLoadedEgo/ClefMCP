@@ -81,18 +81,21 @@ Sweet spot: **decision points inside agent loops** — next action, routing, cla
 | `score` | ordered list (index = score) | probability per level |
 | `noul` | optional `{"true": "...", "false": "..."}` | `{"true": p, "false": 1-p}` |
 
-Response — strictly structured, never prose:
+Response — strictly structured, never prose. Each decision carries the model-reported `confidence` (when the runtime sends it), plus token `usage` for the call:
 
 ```json
 {
   "model": "clef-flash",
   "decisions": {
-    "next_action": { "answer": { "inspect": 0.72, "modify": 0.12, "test": 0.14, "ask_user": 0.02 } },
-    "confidence":  { "answer": { "very_low": 0.01, "low": 0.04, "medium": 0.18, "high": 0.61, "very_high": 0.16 } },
+    "next_action": { "answer": { "inspect": 0.72, "modify": 0.12, "test": 0.14, "ask_user": 0.02 }, "confidence": 0.83 },
+    "confidence":  { "answer": { "very_low": 0.01, "low": 0.04, "medium": 0.18, "high": 0.61, "very_high": 0.16 }, "confidence": 0.61 },
     "is_outage":   { "answer": { "true": 0.9, "false": 0.1 } }
-  }
+  },
+  "usage": { "input_tokens": 228, "output_tokens": 0, "latency_ms": 512 }
 }
 ```
+
+Act on the argmax only when the distribution is decisive — top p ≥ 0.8 and high `confidence` for destructive or security-adjacent calls.
 
 Batch up to **64 questions per call** — they are scored in one forward pass. `state` is treated strictly as **data**: never executed, never interpreted as instructions for the server.
 
