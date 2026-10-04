@@ -3,6 +3,7 @@ import { ClefError, errorJson, exitCodeFor } from '../clef/errors.js';
 import { createClefServer } from '../mcp/server.js';
 import { loadConfig } from '../config/env.js';
 import { Command } from 'commander';
+import { runDecide, type DecideOptions } from './decide.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { runEvals, type EvalsOptions } from './evals.js';
 import { runInstall, type InstallOptions } from './install.js';
@@ -38,6 +39,21 @@ program.action(async () => {
     handleCliError(err);
   }
 });
+
+program
+  .command('decide')
+  .description('One-shot decision (no MCP session): JSON in, strict JSON result out. For hooks, CI and scripts.')
+  .option('--state <source>', 'state: file path, "-" for stdin, or inline JSON/text')
+  .option('--questions <source>', 'questions map: file path, "-" for stdin, or inline JSON')
+  .option('--model <id>', 'model to use (default: CLEF_MODEL or clef-flash)')
+  .action(async (opts: DecideOptions) => {
+    try {
+      await runDecide(opts);
+      process.exit(0);
+    } catch (err) {
+      handleCliError(err);
+    }
+  });
 
 program
   .command('install')

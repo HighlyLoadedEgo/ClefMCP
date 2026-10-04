@@ -181,6 +181,21 @@ args = []
 
 Ready-made snippets: [`examples/`](examples/).
 
+## Scripting & hooks
+
+No MCP client required — hooks, CI jobs and shell scripts call the same model one-shot:
+
+```bash
+# Full document on stdin
+echo '{"state": "checkout 500s after deploy", "questions": {"is_outage": {"type": "noul", "instructions": "Is a service down?"}}}' \
+  | clef-mcp decide
+
+# Or split across files
+clef-mcp decide --questions questions.json --state state.json
+```
+
+stdout carries the strict JSON result (same shape as the MCP tool, including `confidence` and `usage`); errors go to stderr as structured JSON with exit codes: `2` invalid input, `3` model not installed, `4` runtime missing. `decide` never downloads anything. Each invocation is a cold start (model load included, a few seconds) — fine for gates and triage, too slow for hot loops. See [`examples/`](examples/) for a PreToolUse guard and a GitHub Action recipe.
+
 ## Teach your agent (skill)
 
 The schema tells the client *what* `clef_decide` accepts; agents also need to know *when* to reach for it and *how* to frame decisions. The bundled [`clef-decisions`](skills/clef-decisions/SKILL.md) skill covers decision patterns, batching, criteria writing, distribution interpretation and error recovery:
@@ -213,6 +228,7 @@ The `ClefRuntime` interface (`load / decide / unload / health`) isolates the eng
 
 ```bash
 clef-mcp              # run the MCP server on stdio (default command)
+clef-mcp decide       # one-shot decision (no MCP session): JSON in, JSON out — for hooks, CI, scripts
 clef-mcp install      # detect hardware → download model + runtime → verify checksum → verify inference
 clef-mcp setup        # register the MCP server + agent skill in zcode / claude-code / codex / cursor
 clef-mcp models       # list models/quantizations and install status

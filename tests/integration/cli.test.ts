@@ -30,7 +30,7 @@ afterAll(async () => {
 describe('CLI', () => {
   it('--help lists all documented commands', async () => {
     const { stdout } = await run(['--help'], empty.env);
-    for (const cmd of ['install', 'models', 'status', 'doctor', 'uninstall']) {
+    for (const cmd of ['decide', 'install', 'models', 'status', 'doctor', 'uninstall']) {
       expect(stdout).toContain(cmd);
     }
   });

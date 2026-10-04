@@ -1,18 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { ClefError, ClefErrorCode, errorJson } from '../clef/errors.js';
+import { ClefError, errorJson } from '../clef/errors.js';
 import { fromSystemOneResponse, toSystemOneRequest } from '../clef/systemone.js';
 import type { ClefDecideInput } from '../clef/types.js';
 import { loadConfig, type ClefConfig } from '../config/env.js';
 import type { Logger } from '../config/logger.js';
 import { createLogger } from '../config/logger.js';
-import { findInstalledManifest } from '../models/manifest.js';
-import { mlxIsInstalled, resolveUv } from '../models/mlx-install.js';
-import { getModelSpec, type ModelSpec } from '../models/registry.js';
-import { resolveLlamaServerBinary } from '../runtime/binary.js';
-import { LlamaCppRuntime } from '../runtime/llama-cpp.js';
-import { MlxRuntime } from '../runtime/mlx.js';
-import type { ClefRuntime } from '../runtime/types.js';
+import { getModelSpec } from '../models/registry.js';
+import { RuntimeLoader, type RuntimeFactory } from '../runtime/loader.js';
 import { clefDecideInputSchema, clefDecideInputShape, clefDecideOutputSchema, validateStateSize } from './schema.js';
 import { registerPrompts } from './prompts.js';
 import { registerResources } from './resources.js';
@@ -29,25 +24,13 @@ export interface ClefServerDeps {
   version?: string;
   log?: Logger;
   /** Test seam: override runtime construction (defaults per config.runtime). */
-  runtimeFactory?: (opts: {
-    kind: 'llama-cpp' | 'mlx';
-    serverBin?: string;
-    modelPath?: string;
-    snapshotPath?: string;
-    alias: string;
-    log?: Logger;
-  }) => ClefRuntime;
+  runtimeFactory?: RuntimeFactory;
 }
 
 export interface RunningClefServer {
   server: McpServer;
   start(): Promise<void>;
   shutdown(): Promise<void>;
-}
-
-interface LoadedRuntime {
-  runtime: ClefRuntime;
-  model: string;
 }
 
 export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
@@ -59,64 +42,7 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
   registerPrompts(server);
   registerResources(server, config, version);
 
-  let loaded: LoadedRuntime | undefined;
-  let loadPromise: Promise<LoadedRuntime> | undefined;
-
-  async function ensureRuntime(spec: ModelSpec): Promise<LoadedRuntime> {
-    if (loaded && loaded.model === spec.id) return loaded;
-    if (loaded && loaded.model !== spec.id) {
-      await loaded.runtime.unload();
-      loaded = undefined;
-    }
-    if (loadPromise) return loadPromise;
-
-    loadPromise = (async () => {
-      if (config.runtime === 'mlx') {
-        const manifest = await mlxIsInstalled(config.clefHome);
-        if (!manifest) {
-          throw new ClefError(
-            ClefErrorCode.MODEL_NOT_INSTALLED,
-            `Clef model "${spec.id}" is not installed for the MLX runtime.`,
-            'Run `clef-mcp install --runtime mlx`.',
-          );
-        }
-        const uvBin = resolveUv(process.env.CLEF_MLX_UV);
-        const runtime = deps.runtimeFactory
-          ? deps.runtimeFactory({ kind: 'mlx', snapshotPath: manifest.snapshotPath, alias: spec.id, log })
-          : new MlxRuntime({ uvBin, snapshotPath: manifest.snapshotPath, log });
-        log.debug('loading model (mlx)', { model: spec.id, snapshot: manifest.snapshotPath });
-        const loadStarted = Date.now();
-        await runtime.load();
-        log.info('model ready', { model: spec.id, runtime: 'mlx', loadMs: Date.now() - loadStarted });
-        return { runtime, model: spec.id };
-      }
-
-      const manifest = await findInstalledManifest(config.clefHome, spec);
-      if (!manifest) {
-        throw new ClefError(
-          ClefErrorCode.MODEL_NOT_INSTALLED,
-          `Clef model "${spec.id}" is not installed.`,
-          'Run `clef-mcp install`.',
-        );
-      }
-      const binary = resolveLlamaServerBinary(config);
-      const runtime = deps.runtimeFactory
-        ? deps.runtimeFactory({ kind: 'llama-cpp', serverBin: binary.path, modelPath: manifest.modelPath, alias: spec.id, log })
-        : new LlamaCppRuntime({ serverBin: binary.path, modelPath: manifest.modelPath, alias: spec.id, log });
-      log.debug('loading model', { model: spec.id, quant: manifest.quant, bin: binary.path });
-      const loadStarted = Date.now();
-      await runtime.load();
-      log.info('model ready', { model: spec.id, quant: manifest.quant, loadMs: Date.now() - loadStarted });
-      return { runtime, model: spec.id };
-    })();
-
-    try {
-      loaded = await loadPromise;
-      return loaded;
-    } finally {
-      loadPromise = undefined;
-    }
-  }
+  const loader = new RuntimeLoader(config, log, deps.runtimeFactory);
 
   server.registerTool(
     TOOL_NAME,
@@ -155,7 +81,7 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
           options: parsed.options,
         };
         const request = toSystemOneRequest(input, spec.id);
-        const { runtime } = await ensureRuntime(spec);
+        const { runtime } = await loader.ensure(spec);
         const response = await runtime.decide(request);
         const output = fromSystemOneResponse(response, parsed.questions, spec.id);
         return {
@@ -174,10 +100,7 @@ export function createClefServer(deps: ClefServerDeps = {}): RunningClefServer {
   );
 
   async function shutdown(): Promise<void> {
-    if (loaded) {
-      await loaded.runtime.unload();
-      loaded = undefined;
-    }
+    await loader.dispose();
   }
 
   async function start(): Promise<void> {
