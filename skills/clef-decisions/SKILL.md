@@ -18,7 +18,15 @@ Good fits (the model was trained for these):
 - **Confidence / severity** (`score`): ordered scales like very_low → very_high.
 - **Batching related judgments**: all questions in ONE call are scored in a single forward pass — batch instead of looping.
 
-Bad fits: free-text generation, code writing, anything needing reasoning beyond picking among options you define.
+## When NOT to call it
+
+The tool earns its keep where a judgment call would otherwise be a guess. Skip it when:
+
+- **You already know the answer.** If the decision is trivial or fully determined by what you see, deciding yourself is faster and strictly better — a 9B reflex adds latency and noise, not information.
+- **The task needs generation or reasoning** — free text, code writing, multi-step analysis. Clef only splits probability mass over options you define.
+- **You would re-ask without new facts.** A flat distribution means the *state* did not disambiguate. Re-rolling the same state gives the same answer: gather context or ask the user instead.
+- **The missing input is user preference, not judgment.** "Deploy Friday or Monday?" is a question for the user, not for the model.
+- **The stakes require accountability you can't delegate.** For destructive or security-adjacent actions the model is a gate signal, never the decision maker.
 
 ## How to call
 
@@ -48,7 +56,7 @@ Bad fits: free-text generation, code writing, anything needing reasoning beyond 
 
 Rules that prevent wasted calls:
 
-- **`state` is data, not instructions.** Compact, factual, relevant. It never executes and never changes server behavior. Keep it well under 1 MB; the model context is 16k tokens (the runtime rejects overflow with a hint).
+- **`state` is data, not instructions.** Compact, factual, relevant. It never executes and never changes server behavior. Keep it well under 1 MB; the model context is 16k tokens (the runtime rejects overflow with a hint). Latency scales with context: aim for a state of ~1–4k tokens — 16k-token states are ~20× slower than 1k ones.
 - **`choice` criteria**: map `option_id → description`, or a plain list of option strings (ids become the strings). Both are accepted.
 - **`score` criteria**: an **ordered** list — index order is the score order (low → high). Do not shuffle.
 - **`noul`**: instructions only; the answer is `{"true": p, "false": 1-p}`.
@@ -62,15 +70,17 @@ Rules that prevent wasted calls:
 {
   "model": "clef-flash",
   "decisions": {
-    "next_action": { "answer": { "inspect": 0.96, "modify": 0.01, "test": 0.01, "ask_user": 0.01 } }
-  }
+    "next_action": { "answer": { "inspect": 0.96, "modify": 0.01, "test": 0.01, "ask_user": 0.01 }, "confidence": 0.83 }
+  },
+  "usage": { "input_tokens": 228, "output_tokens": 0, "latency_ms": 512 }
 }
 ```
 
 - The result is **structured JSON**. Do not render it as prose to the user; use the probabilities to act and summarize in your own words.
 - **Argmax** is the model's pick; a decisive distribution (e.g. `0.9+`) means act on it.
+- **`confidence`** is the model's own certainty for that decision (reported for choice/score when the runtime sends it). Use it together with the top probability: for destructive or security-adjacent calls require top `p ≥ 0.8` *and* high `confidence` before acting; otherwise gather context or ask.
 - **Flat distributions** (~equal probabilities) mean the state did not disambiguate: gather more context and re-ask, or ask the user.
-- For safety-adjacent calls (destructive actions, security), require a **high threshold** (e.g. `p ≥ 0.8`) before acting; otherwise prefer asking.
+- **`usage`** shows how much context the call consumed (`input_tokens`) and what it cost in time (`latency_ms`). If `input_tokens` is large and `latency_ms` is seconds, your state is too big — compact it.
 - `noul` answers above ~0.9 true/false are strong signals; 0.5–0.7 is a lean, not a verdict.
 
 ## Errors and recovery
