@@ -198,6 +198,8 @@ stdout carries the strict JSON result (same shape as the MCP tool, including `co
 
 Each plain `decide` invocation is a cold start (model load included, a few seconds) — fine for gates and triage. For repeated calls, start `clef-mcp daemon` once: it keeps the model warm on a permission-scoped unix socket in `CLEF_HOME` (no TCP port, unloads after `CLEF_DAEMON_IDLE` seconds, default 600), and `clef-mcp decide --daemon` answers in well under a second, falling back to a cold run when no daemon is running. See [`examples/hooks/`](examples/hooks/) for a PreToolUse guard and a GitHub Action recipe.
 
+The PreToolUse guard blocks a command when the model judges it destructive (p ≥ 0.9) and tells the agent to **ask the user** — a block is a pause plus escalation, not a wall; the gate is advisory by design and says so. First real firing on day one: caught a history-rewrite force push (p=0.94) and surfaced its own bypass vector, which is now fixed and documented in the recipe.
+
 ## Teach your agent (skill)
 
 The schema tells the client *what* `clef_decide` accepts; agents also need to know *when* to reach for it and *how* to frame decisions. The bundled [`clef-decisions`](skills/clef-decisions/SKILL.md) skill covers decision patterns, batching, criteria writing, distribution interpretation and error recovery:

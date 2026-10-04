@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- PreToolUse guard recipe, hardened after its first real firing (2026-10-04):
+  - the pre-filter is semantic about history-rewriting pushes — `--force` (incl. `--force-with-lease`), `-f`, the `+refspec` form, and `git filter-repo`/`filter-branch` all reach the model; previously a literal `push --force` match alone was bypassed by re-running the same push as a `+refspec`;
+  - the block message now routes the agent to the user ("ask the user to confirm explicitly") instead of hinting at a re-run without the guard;
+  - recipe README documents the block semantics (pause + escalation, not a wall) and the incident.
+
 ## [0.3.0] — 2026-10-04
 
 ### Added

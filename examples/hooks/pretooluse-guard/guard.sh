@@ -23,7 +23,11 @@ COMMAND=$(printf '%s' "$EVENT" | jq -r '.tool_input.command // empty')
 [ -z "$COMMAND" ] && exit 0
 
 # Cheap pre-filter: only spend a model call on plausibly risky commands.
-if ! printf '%s' "$COMMAND" | grep -qiE '\b(rm|mv|dd|mkfs|shred|chmod|chown|kill|pkill|drop|truncate|push --force|reset --hard|clean -|publish|curl[^|]*\|\s*(ba)?sh|wget[^|]*\|\s*(ba)?sh)\b'; then
+# History-rewriting pushes come in several clothes: --force, -f, force-with-lease
+# and the +refspec form ('git push origin "+refs/heads/*:refs/heads/*"') — all
+# go to the model, because a literal 'push --force' match alone was bypassed in
+# the wild (2026-10-04: same push re-run as a +refspec).
+if ! printf '%s' "$COMMAND" | grep -qiE '\b(rm|mv|dd|mkfs|shred|chmod|chown|kill|pkill|drop|truncate|reset --hard|clean -|publish|filter-repo|filter-branch)\b|push[^|]*(--force|-f[ =]|\+refs)|[^|]*\|\s*(ba)?sh'; then
   exit 0
 fi
 
@@ -54,7 +58,7 @@ echo "clef guard: p(destructive)=$P_DESTRUCTIVE blast_radius=$TOP_RADIUS" >&2
 
 BLOCKED=$(printf '%s' "$DECISION" | jq -n --argjson p "$P_DESTRUCTIVE" '$p >= 0.9')
 if [ "$BLOCKED" = "true" ]; then
-  echo "Blocked: the local Clef model judges this command destructive (p=$P_DESTRUCTIVE, blast_radius=$TOP_RADIUS). Re-run without the guard if you are sure." >&2
+  echo "Blocked: the local Clef model judges this command destructive (p=$P_DESTRUCTIVE, blast_radius=$TOP_RADIUS). Ask the user to confirm explicitly; if they confirm, let them run it themselves or have them disable the guard. Do not work around this gate by rephrasing the command." >&2
   exit 2
 fi
 
