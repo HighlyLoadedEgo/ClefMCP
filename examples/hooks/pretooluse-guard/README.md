@@ -41,9 +41,29 @@ cp guard.sh ~/.local/bin/clef-guard.sh && chmod +x ~/.local/bin/clef-guard.sh
 </details>
 
 <details>
-<summary><b>ZCode</b></summary>
+<summary><b>ZCode</b> — <code>~/.zcode/cli/config.json</code></summary>
 
-Register the same command as a `PreToolUse` hook for Bash in your ZCode hooks config. The script reads the event JSON from stdin and uses exit code `2` to block — the standard contract.
+Configuration-file hooks are **disabled by default** — the top-level `"enabled": true` is required:
+
+```json
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "PreToolUse": [
+        {
+          "matcher": "Bash",
+          "hooks": [
+            { "type": "command", "command": "~/.local/bin/clef-guard.sh", "timeout": 90, "statusMessage": "clef guard: judging command risk" }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+The matcher is a case-sensitive regex against the tool name (`Bash`, not `bash`). `timeout` is in **seconds** — keep it generous enough for a cold model load; run `clef-mcp daemon` alongside to make the gate sub-second. Exit code `2` is the standard deny.
 </details>
 
 ## Honest caveats
