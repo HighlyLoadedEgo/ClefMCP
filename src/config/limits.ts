@@ -22,6 +22,17 @@ export const DEFAULT_LIMITS: Limits = {
   maxQuestionIdChars: 128,
 };
 
+/** Batch-processing bounds, independent of the existing MCP configuration. */
+export const CLASSIFY_LIMITS = {
+  maxProfileBytes: 1024 * 1024,
+  maxRecordBytes: 1024 * 1024,
+  maxResultBytes: 1024 * 1024,
+  maxExamples: 20,
+  maxFields: 1000,
+  maxDepth: 64,
+  maxMetadataBytes: 16 * 1024,
+} as const;
+
 function intFromEnv(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
   const raw = env[key];
   if (!raw?.trim()) return fallback;
