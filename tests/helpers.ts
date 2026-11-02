@@ -31,6 +31,7 @@ export async function makeFakeInstall(options?: {
   quant?: string;
   dirLabel?: string;
   healthDelayMs?: number;
+  inferenceDelayMs?: number;
   withModel?: boolean;
 }): Promise<FakeInstall> {
   const clefHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'clef-it-'));
@@ -68,7 +69,7 @@ export async function makeFakeInstall(options?: {
   const wrapperPath = path.join(binDir, 'llama-server');
   const script = [
     '#!/bin/sh',
-    `exec node "${fakeServerScript()}" --health-delay-ms ${options?.healthDelayMs ?? 0} "$@"`,
+    `exec node "${fakeServerScript()}" --health-delay-ms ${options?.healthDelayMs ?? 0} --inference-delay-ms ${options?.inferenceDelayMs ?? 0} "$@"`,
     '',
   ].join('\n');
   await fsp.writeFile(wrapperPath, script);

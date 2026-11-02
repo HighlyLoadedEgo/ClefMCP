@@ -45,13 +45,15 @@ function createQueue() {
  *   -> {state, questions, model?} | {ping: true}
  *   <- {model, decisions, usage?} | {error: {code, message, hint?}}
  * Nothing is downloaded and no TCP port is opened; the socket file's own
- * permissions (default umask) are the access control.
+ * permissions are explicitly restricted to the current user.
  */
 export function startDaemon(config: ClefConfig, log: Logger): RunningDaemon {
   const socketPath = daemonSocketPath(config.clefHome);
   const loader = new RuntimeLoader(config, log);
   const enqueue = createQueue();
   let lastUsedAt = Date.now();
+  let pendingRequests = 0;
+  let idleUnloadQueued = false;
   let closed = false;
 
   const ready = (async () => {
@@ -94,14 +96,36 @@ export function startDaemon(config: ClefConfig, log: Logger): RunningDaemon {
       });
     });
 
-    server.listen(socketPath);
+    await new Promise<void>((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+      // Unix sockets bind synchronously in listen(): keep permissions private
+      // from creation, then restore the caller's umask immediately.
+      const previousUmask = process.umask(0o177);
+      try {
+        server.listen(socketPath);
+      } finally {
+        process.umask(previousUmask);
+      }
+    });
+    await fsp.chmod(socketPath, 0o600);
     log.info('clef-mcp daemon listening', { socket: socketPath });
 
     const idleMs = config.daemonIdleSeconds * 1000;
     const idleTimer = config.daemonIdleSeconds > 0
       ? setInterval(() => {
-          if (closed || Date.now() - lastUsedAt < idleMs) return;
-          void loader.dispose().then(() => log.info('daemon idle, model unloaded'));
+          if (closed || pendingRequests > 0 || idleUnloadQueued || Date.now() - lastUsedAt < idleMs) return;
+          idleUnloadQueued = true;
+          // Share the inference queue so a new request cannot race an unload.
+          void enqueue(async () => {
+            if (closed || pendingRequests > 0 || Date.now() - lastUsedAt < idleMs) return;
+            await loader.dispose();
+            log.info('daemon idle, model unloaded');
+          }).catch((err) => {
+            log.error('daemon idle unload failed', errorJson(err).error);
+          }).finally(() => {
+            idleUnloadQueued = false;
+          });
         }, Math.min(idleMs, 60_000))
       : undefined;
     if (idleTimer) idleTimer.unref();
@@ -118,11 +142,6 @@ export function startDaemon(config: ClefConfig, log: Logger): RunningDaemon {
     };
     process.once('SIGINT', shutdown);
     process.once('SIGTERM', shutdown);
-
-    await new Promise<void>((resolve, reject) => {
-      server.once('listening', resolve);
-      server.once('error', reject);
-    });
   })();
 
   async function handleLine(line: string, socket: net.Socket): Promise<void> {
@@ -137,9 +156,14 @@ export function startDaemon(config: ClefConfig, log: Logger): RunningDaemon {
       writeLine(socket, { pong: true, model: config.model });
       return;
     }
-    lastUsedAt = Date.now();
-    const result = await enqueue(() => decideOnce(request));
-    writeLine(socket, result);
+    pendingRequests += 1;
+    try {
+      const result = await enqueue(() => decideOnce(request));
+      writeLine(socket, result);
+    } finally {
+      pendingRequests -= 1;
+      lastUsedAt = Date.now();
+    }
   }
 
   async function decideOnce(request: DaemonRequest): Promise<Record<string, unknown>> {

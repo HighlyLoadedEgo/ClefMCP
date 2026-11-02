@@ -65,6 +65,6 @@ If you change prompting, adapter mapping or runtime, run evals before and after 
 
 ## Releasing (maintainers)
 
-1. Update `VERSION` in `src/version.ts` + `package.json`.
+1. Update `VERSION` in `src/version.ts`, `package.json` and `package-lock.json`; sync the versions in `server.json` and `manifest.json`, and add release notes to `CHANGELOG.md`.
 2. `npm test && npm run build && npm pack` — smoke-test the tarball.
-3. Commit and push the version tag (`git tag v0.1.0 && git push origin v0.1.0`) — the `publish.yml` workflow builds, tests and publishes to npm with provenance. It needs the `NPM_TOKEN` secret in the repo.
+3. Commit and push the version tag (`git tag v0.3.1 && git push origin v0.3.1`) — the `publish.yml` workflow builds, tests and publishes to npm with provenance through Trusted Publishing (OIDC, no `NPM_TOKEN`), publishes to the official MCP Registry, and attaches a `.mcpb` bundle to the GitHub Release.

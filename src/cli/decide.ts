@@ -104,7 +104,8 @@ export async function runDecide(opts: DecideOptions): Promise<void> {
     if (typeof record.model === 'string') model = record.model;
   }
 
-  const doc = { state, questions, ...(model ? { model } : {}) };
+  model = opts.model ?? model ?? config.model;
+  const doc = { state, questions, model };
 
   if (opts.daemon) {
     const answered = await tryDaemon(config, doc);

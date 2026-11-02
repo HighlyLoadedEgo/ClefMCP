@@ -9,6 +9,7 @@
  * Usage: fake-llama-server.mjs -m <model> --host <h> --port <p> [--health-delay-ms N]
  */
 import http from 'node:http';
+import { appendFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 function argValue(flag) {
@@ -17,6 +18,7 @@ function argValue(flag) {
 }
 
 const healthDelayMs = Number(argValue('--health-delay-ms') ?? 0);
+const inferenceDelayMs = Number(argValue('--inference-delay-ms') ?? 0);
 const port = Number(argValue('--port') ?? 0);
 const host = argValue('--host') ?? '127.0.0.1';
 const modelPath = argValue('-m') ?? 'fake-model.gguf';
@@ -69,7 +71,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/v1/systemone') {
     let body = '';
     req.on('data', (c) => (body += c));
-    req.on('end', () => {
+    req.on('end', async () => {
       let request;
       try {
         request = JSON.parse(body);
@@ -83,6 +85,7 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ error: { message: 'maximum context length exceeded' } }));
         return;
       }
+      if (inferenceDelayMs > 0) await new Promise((r) => setTimeout(r, inferenceDelayMs));
       const answers = {};
       for (const [qid, question] of Object.entries(request.questions ?? {})) {
         answers[qid] = answerFor(question);
@@ -104,6 +107,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, host, () => {
+  if (process.env.FAKE_LLAMA_START_LOG) appendFileSync(process.env.FAKE_LLAMA_START_LOG, `${process.pid}\n`);
   process.stderr.write(`fake-llama-server listening on ${host}:${port} (model: ${modelPath})\n`);
 });
 

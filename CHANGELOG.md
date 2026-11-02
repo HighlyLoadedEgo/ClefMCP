@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-02
+
+### Fixed
+- Daemon idle unloading now waits for all active and queued decisions to finish and measures inactivity from completion, preventing long requests from failing when `CLEF_DAEMON_IDLE` expires. Idle unloading and inference share the same queue to avoid reload/unload races.
+- `clef-mcp decide --model` is honored for stdin, file and inline input, including `--daemon`. Model selection follows CLI flag → input document → `CLEF_MODEL` → default.
+- The daemon socket is created with private permissions and explicitly set to `0600`, including when launched with a permissive umask.
+
 ### Changed
 - `clef_decide` tool description tightened after a TDQS re-evaluation dropped conciseness to 4/5: the temperature no-op is now stated only in the schema (was duplicated in prose), and the confidence/usage + threshold guidance is compressed to two lines.
 - PreToolUse guard recipe, hardened after its first real firing (2026-10-04):

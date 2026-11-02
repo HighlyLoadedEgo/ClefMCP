@@ -65,6 +65,55 @@ afterAll(async () => {
 });
 
 describe('clef-mcp daemon', () => {
+  it('restricts the socket to its owner even with a permissive umask', async () => {
+    const scopedInstall = await makeFakeInstall();
+    let scopedDaemon: Child | undefined;
+    try {
+      const previousUmask = process.umask(0);
+      try {
+        scopedDaemon = startDaemonCli(scopedInstall.env);
+      } finally {
+        process.umask(previousUmask);
+      }
+      const socketPath = daemonSocketPath(scopedInstall.clefHome);
+      await waitUntilReady(socketPath);
+      expect((await fsp.stat(socketPath)).mode & 0o777).toBe(0o600);
+    } finally {
+      await scopedDaemon?.stop();
+      await fsp.rm(scopedInstall.clefHome, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps active and queued decisions loaded, then unloads after a full idle window', async () => {
+    const busyInstall = await makeFakeInstall({ inferenceDelayMs: 1500 });
+    const startLog = path.join(busyInstall.clefHome, 'runtime-starts');
+    const busyDaemon = startDaemonCli({ ...busyInstall.env, CLEF_DAEMON_IDLE: '1', FAKE_LLAMA_START_LOG: startLog });
+    try {
+      const socketPath = daemonSocketPath(busyInstall.clefHome);
+      await waitUntilReady(socketPath);
+      const args = sampleDecideArgs();
+      // Warm up once, then keep the runtime busy beyond the idle timeout.
+      const warm = await decideViaDaemon(socketPath, args, 10_000);
+      expect(warm?.decisions).toBeTruthy();
+      const results = await Promise.all([
+        decideViaDaemon(socketPath, args, 10_000),
+        decideViaDaemon(socketPath, args, 10_000),
+      ]);
+      for (const result of results) expect(result?.decisions).toBeTruthy();
+
+      // A request right after completion must reuse the warm runtime.
+      expect((await decideViaDaemon(socketPath, args, 10_000))?.decisions).toBeTruthy();
+      expect((await fsp.readFile(startLog, 'utf8')).trim().split('\n')).toHaveLength(1);
+
+      await new Promise((r) => setTimeout(r, 2500));
+      expect((await decideViaDaemon(socketPath, args, 10_000))?.decisions).toBeTruthy();
+      expect((await fsp.readFile(startLog, 'utf8')).trim().split('\n')).toHaveLength(2);
+    } finally {
+      await busyDaemon.stop();
+      await fsp.rm(busyInstall.clefHome, { recursive: true, force: true });
+    }
+  });
+
   it(
     'serves decide requests on the CLEF_HOME socket and removes it on exit',
     async () => {
@@ -86,6 +135,20 @@ describe('clef-mcp daemon', () => {
       expect(run.code).toBe(0);
       const out = JSON.parse(run.stdout) as { model: string };
       expect(out.model).toBe('clef-flash');
+
+      const unknownModel = await decideArgs(install.env, ['decide', '--daemon', '--model', 'missing-model'], JSON.stringify(sampleDecideArgs()));
+      expect(unknownModel.code).toBe(2);
+      expect(unknownModel.stdout).toBe('');
+      expect(unknownModel.stderr).toContain('Unknown model "missing-model"');
+
+      const overriddenModel = await decideArgs(install.env, ['decide', '--daemon', '--model', 'clef-flash'], JSON.stringify({ ...sampleDecideArgs(), model: 'missing-model' }));
+      expect(overriddenModel.code).toBe(0);
+      expect(JSON.parse(overriddenModel.stdout).model).toBe('clef-flash');
+
+      const envModel = await decideArgs({ ...install.env, CLEF_MODEL: 'missing-env-model' }, ['decide', '--daemon'], JSON.stringify(sampleDecideArgs()));
+      expect(envModel.code).toBe(2);
+      expect(envModel.stdout).toBe('');
+      expect(envModel.stderr).toContain('Unknown model "missing-env-model"');
 
       // SIGTERM stops the daemon and cleans up the socket file.
       await daemon.stop();

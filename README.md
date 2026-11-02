@@ -196,7 +196,9 @@ clef-mcp decide --questions questions.json --state state.json
 
 stdout carries the strict JSON result (same shape as the MCP tool, including `confidence` and `usage`); errors go to stderr as structured JSON with exit codes: `2` invalid input, `3` model not installed, `4` runtime missing. `decide` never downloads anything.
 
-Each plain `decide` invocation is a cold start (model load included, a few seconds) — fine for gates and triage. For repeated calls, start `clef-mcp daemon` once: it keeps the model warm on a permission-scoped unix socket in `CLEF_HOME` (no TCP port, unloads after `CLEF_DAEMON_IDLE` seconds, default 600), and `clef-mcp decide --daemon` answers in well under a second, falling back to a cold run when no daemon is running. See [`examples/hooks/`](examples/hooks/) for a PreToolUse guard and a GitHub Action recipe.
+Model selection: `--model <id>` overrides the input document's `model`, which overrides `CLEF_MODEL` (default: `clef-flash`). The same precedence applies with `--daemon`.
+
+Each plain `decide` invocation is a cold start (model load included, a few seconds) — fine for gates and triage. For repeated calls, start `clef-mcp daemon` once: it keeps the model warm on an owner-only (`0600`) unix socket in `CLEF_HOME` (no TCP port, unloads after `CLEF_DAEMON_IDLE` seconds of inactivity following the last completed decision, default 600). Active and queued requests prevent idle unloading. `clef-mcp decide --daemon` answers in well under a second, falling back to a cold run when no daemon is running. See [`examples/hooks/`](examples/hooks/) for a PreToolUse guard and a GitHub Action recipe.
 
 The PreToolUse guard blocks a command when the model judges it destructive (p ≥ 0.9) and tells the agent to **ask the user** — a block is a pause plus escalation, not a wall; the gate is advisory by design and says so. First real firing on day one: caught a history-rewrite force push (p=0.94) and surfaced its own bypass vector, which is now fixed and documented in the recipe.
 

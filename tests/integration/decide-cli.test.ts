@@ -45,6 +45,37 @@ interface DecideOutput {
 }
 
 describe('clef-mcp decide (one-shot CLI)', () => {
+  it.each([false, true])('honors --model for stdin input (daemon=%s)', async (daemon) => {
+    const { code, stdout, stderr } = await run(
+      ['decide', '--model', 'missing-model', ...(daemon ? ['--daemon'] : [])],
+      install.env,
+      JSON.stringify(sampleDecideArgs()),
+    );
+    expect(code).toBe(2);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('Unknown model "missing-model"');
+  });
+
+  it('lets --model override the stdin model and CLEF_MODEL', async () => {
+    const { code, stdout } = await run(
+      ['decide', '--model', 'clef-flash'],
+      { ...install.env, CLEF_MODEL: 'missing-env-model' },
+      JSON.stringify({ ...sampleDecideArgs(), model: 'missing-input-model' }),
+    );
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout).model).toBe('clef-flash');
+  });
+
+  it('honors --model with --questions and --state', async () => {
+    const { code, stdout, stderr } = await run(
+      ['decide', '--model', 'missing-model', '--questions', '{"ok":{"type":"noul","instructions":"Is it OK?"}}', '--state', 'test'],
+      install.env,
+    );
+    expect(code).toBe(2);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('Unknown model "missing-model"');
+  });
+
   it(
     'reads a full document from stdin and prints the strict JSON result',
     async () => {
