@@ -6,6 +6,7 @@ import { createLogger } from '../config/logger.js';
 import { startDaemon } from '../daemon/daemon.js';
 import { Command } from 'commander';
 import { runDecide, type DecideOptions } from './decide.js';
+import { runClassify, type ClassifyOptions } from './classify.js';
 import { runDoctor, type DoctorOptions } from './doctor.js';
 import { runEvals, type EvalsOptions } from './evals.js';
 import { runInstall, type InstallOptions } from './install.js';
@@ -41,6 +42,19 @@ program.action(async () => {
     handleCliError(err);
   }
 });
+
+program
+  .command('classify <input>')
+  .description('Classify JSONL/CSV records using a YAML profile; uncertain results require review. Use "-" for stdin.')
+  .requiredOption('--profile <path>', 'YAML classification profile')
+  .option('--output <path>', 'JSONL output file (default: stdout; existing files are protected)')
+  .option('--format <format>', 'input format: jsonl or csv (default: file extension, JSONL for stdin)')
+  .option('--model <id>', 'override the profile model and CLEF_MODEL')
+  .option('--resume', 'resume a matching file input/output checkpoint')
+  .action(async (input: string, opts: ClassifyOptions) => {
+    try { process.exit(await runClassify(input, opts)); }
+    catch (err) { handleCliError(err); }
+  });
 
 program
   .command('decide')

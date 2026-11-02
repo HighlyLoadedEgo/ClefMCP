@@ -90,6 +90,9 @@ const server = http.createServer((req, res) => {
       for (const [qid, question] of Object.entries(request.questions ?? {})) {
         answers[qid] = answerFor(question);
       }
+      if (process.env.FAKE_LLAMA_BAD_DISTRIBUTION && answers.classification) {
+        answers.classification.probabilities = { unexpected: 1 };
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
