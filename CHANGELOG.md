@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-02
+
+### Added
+- **`clef-mcp classify <input> --profile <yaml>`**: reusable local classification of JSONL or CSV records, with a single model load per batch, strict JSONL results and stderr summaries.
+- **Versioned YAML profiles**: named labels, instructions, input field/ID selection, optional model override and up to 20 labeled reference examples. YAML is parsed as data with duplicate/unknown fields, aliases and unsafe tags rejected.
+- **Explicit `needs_review` results**: probability and top-two margin thresholds, optional model confidence threshold, stable suggestions, full distributions and machine-readable review reasons. Uncertain results have `label: null`; invalid distributions fail instead of being accepted.
+- **Safe file output and `--resume`**: private output/checkpoint files, input/profile/model/runtime fingerprints, exclusive writer locks, committed-row recovery and protection against source aliases or silent overwrite.
+- Packaged JSONL/CSV classification examples and an expanded README covering both agent decisions and dataset workflows.
+
+### Changed
+- Publishing waits for public npm visibility before MCP Registry registration and allows longer CDN propagation retries.
+- `.mcpb` bundles now include the README, examples, skill and evaluation dataset.
+
 ## [0.3.1] — 2026-11-02
 
 ### Fixed

@@ -250,4 +250,4 @@ names in the file/interface section. Review Focus cases have explicit tests
 in their owning tasks. No changes to existing shared prompting or runtime
 semantics are planned; existing evals become required if that changes.
 
-Status: proposed implementation plan, awaiting review and execution-method selection.
+Status: approved by the user on 2026-11-02; native execution selected.

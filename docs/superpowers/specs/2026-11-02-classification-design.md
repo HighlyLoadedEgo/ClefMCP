@@ -1,6 +1,6 @@
 # ClefMCP 0.4.0: reusable local classification
 
-Status: proposed specification, awaiting user review.
+Status: approved by the user on 2026-11-02.
 
 ## Outcome and scope
 

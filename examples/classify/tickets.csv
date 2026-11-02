@@ -1,0 +1,4 @@
+id,subject,body
+001,Refund request,"I was charged twice for the same subscription. Please refund the duplicate payment."
+002,Connection error,"The integration fails with HTTP 500 whenever I submit a request."
+003,Payment page error,"I cannot finish paying because the checkout page crashes."

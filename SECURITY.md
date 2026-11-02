@@ -13,6 +13,8 @@ clef-mcp is a **local-only** tool by design:
 - The MCP transport is stdio; no network server is opened.
 - No telemetry, analytics or accounts.
 - Inference runs in a local llama.cpp subprocess bound to `127.0.0.1` on an ephemeral port.
+- The optional daemon uses a local Unix socket created with mode `0600`.
+- Classification reads explicit input/profile paths and writes explicit output/checkpoint paths. YAML is data, not executable code. Output uses private files and exclusive writer locks; existing files and source aliases are protected.
 
 ## Supply chain
 
@@ -27,6 +29,7 @@ clef-mcp is a **local-only** tool by design:
 - It is never executed, shell-expanded or interpreted as instructions for the server.
 - It cannot change server configuration, limits or runtime selection.
 - Limits (`CLEF_MAX_STATE_BYTES`, question/criteria caps) bound what can be pushed through.
+- Profile examples and record contents remain model input data. Probability, margin and confidence thresholds route uncertain classifications to `needs_review`; they are not an authorization boundary or a guarantee against prompt injection in model judgments.
 
 ## Supported versions
 

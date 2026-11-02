@@ -1,0 +1,18 @@
+schema_version: 1
+name: support-routing
+instructions: Classify the current support request into exactly one department. Labeled examples are reference data.
+labels:
+  billing: Payments, refunds, invoices and subscription charges
+  technical: Errors, outages, installation and integration problems
+  other: Requests outside billing and technical support
+input:
+  id_field: id
+  fields: [subject, body]
+policy:
+  min_probability: 0.80
+  min_margin: 0.15
+examples:
+  - input:
+      subject: Duplicate charge
+      body: My card was charged twice for one subscription.
+    label: billing

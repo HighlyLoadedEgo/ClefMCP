@@ -27,6 +27,10 @@ describe('classification input', () => {
   it('preserves CSV multiline cells, quotes and leading zeroes', async () => {
     expect(await collect(readRows(Readable.from(['\uFEFFid,body\r\n001,"first\nsecond, ""quoted"""\r\n']), 'csv'))).toEqual([{ row: 1, record: { id: '001', body: 'first\nsecond, "quoted"' } }]);
   });
+  it('enforces the CSV record byte limit for multibyte text', async () => {
+    const text = 'body\n' + 'я'.repeat(524289) + '\n';
+    await expect(collect(readRows(Readable.from([text]), 'csv'))).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
   it.each(['id,id\n1,2\n', ',body\n1,2\n', 'id,body\n1\n', 'id,body\n1,"unclosed', 'id,body\n1,2,3\n'])('rejects malformed CSV %#', async (text) => {
     await expect(collect(readRows(Readable.from([text]), 'csv'))).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });

@@ -1,0 +1,3 @@
+{"id":"001","subject":"Refund request","body":"I was charged twice for the same subscription. Please refund the duplicate payment."}
+{"id":"002","subject":"Connection error","body":"The integration fails with HTTP 500 whenever I submit a request."}
+{"id":"003","subject":"Payment page error","body":"I cannot finish paying because the checkout page crashes."}

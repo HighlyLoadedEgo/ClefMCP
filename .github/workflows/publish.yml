@@ -37,22 +37,32 @@ jobs:
       - name: Publish to the official MCP Registry
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          # npm publication and public visibility are separate events.
+          # A fresh version may take several minutes to propagate.
+          for attempt in $(seq 1 20); do
+            FOUND=$(npm view "clef-mcp@$VERSION" version --registry=https://registry.npmjs.org --prefer-online 2>/dev/null || true)
+            if [ "$FOUND" = "$VERSION" ]; then break; fi
+            if [ "$attempt" = 20 ]; then
+              echo "npm version $VERSION is not publicly visible" >&2
+              exit 1
+            fi
+            sleep 30
+          done
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.json.tmp
           mv server.json.tmp server.json
           curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" -o /tmp/mcp-publisher.tgz
           tar -xzf /tmp/mcp-publisher.tgz -C /tmp mcp-publisher
           sudo mv /tmp/mcp-publisher /usr/local/bin/mcp-publisher
           mcp-publisher login github-oidc
-          # npm CDN can lag a few seconds behind a fresh publish; the registry
-          # validates the npm package, so retry until it is visible.
-          for attempt in 1 2 3 4 5; do
+          # The registry may use a different npm CDN edge; allow its cache to catch up.
+          for attempt in $(seq 1 20); do
             if mcp-publisher publish; then
               exit 0
             fi
             echo "registry publish attempt $attempt failed; retrying in 30s..."
             sleep 30
           done
-          echo "registry publish failed after 5 attempts" >&2
+          echo "registry publish failed after 20 attempts" >&2
           exit 1
       - name: Build .mcpb bundle
         run: |
@@ -60,7 +70,9 @@ jobs:
           jq --arg v "$VERSION" '.version = $v' manifest.json > manifest.json.tmp
           mv manifest.json.tmp manifest.json
           STAGE=$(mktemp -d)
-          cp -R dist manifest.json package.json package-lock.json NOTICE LICENSE "$STAGE/"
+          cp -R dist examples skills assets manifest.json package.json package-lock.json README.md NOTICE LICENSE "$STAGE/"
+          mkdir -p "$STAGE/tests"
+          cp -R tests/evals "$STAGE/tests/"
           cd "$STAGE"
           npm ci --omit=dev --no-audit --no-fund
           npx -y @anthropic-ai/mcpb pack "$STAGE" "$GITHUB_WORKSPACE/clef-mcp-${VERSION}.mcpb"

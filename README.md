@@ -10,9 +10,9 @@
 [![Official MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.HighlyLoadedEgo-blue)](https://registry.modelcontextprotocol.io)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-**A "reflex" for AI coding agents: structured decisions with probabilities — not prose.**
+**Local decisions for AI agents. Reusable classification for your datasets.**
 
-Local [MCP](https://modelcontextprotocol.io) server that gives agents (Claude Code, Codex, Cursor, ZCode, …) access to the **Clef-Flash** decision model (9B, Apache-2.0 by Cloudflare) through a single tool: `clef_decide`. Pass a `state` and typed questions, get a **probability distribution over your options** in one forward pass. Fully local, offline, no tokens burned.
+Run **Clef-Flash** (9B, Apache-2.0 by Cloudflare) locally. Give coding agents a structured [MCP](https://modelcontextprotocol.io) decision tool, or classify JSONL/CSV datasets with YAML profiles. Get probabilities and explicit review results instead of generated prose. Inference stays on your machine.
 
 </div>
 
@@ -20,18 +20,133 @@ Local [MCP](https://modelcontextprotocol.io) server that gives agents (Claude Co
 
 ## Quick start
 
+Requires Node.js 20+ and enough memory for the selected model (16 GB recommended for Q4_K_M). The default model download is approximately 6 GB; subsequent inference runs offline.
+
 ```bash
-# 1. Detect hardware, download the model (~6 GB) + llama.cpp runtime, verify checksum + inference
-npx clef-mcp install
-
-# 2. Register the MCP server + agent skill in your clients (zcode, claude-code, codex, cursor)
-npx clef-mcp setup
-
-# 3. Run the MCP server (stdio)
-npx clef-mcp
+npm install -g clef-mcp
+clef-mcp install
 ```
 
-`clef-mcp` (step 3) never downloads anything. If the model is missing, tool calls return a structured `MODEL_NOT_INSTALLED` error with a hint. Steps 1 and 2 combine: `npx clef-mcp install --setup`.
+Choose your workflow:
+
+| Workflow | Start here |
+|---|---|
+| Decisions inside Claude Code, Codex, Cursor or ZCode | `clef-mcp setup`, then restart your client; [client configuration](#register-with-your-mcp-client) |
+| Classify tickets, documents or other records | [YAML profiles and dataset classification](#classify-jsonlcsv-with-a-yaml-profile) |
+| Hooks, CI or shell scripts | [`clef-mcp decide`](#scripting--hooks) |
+
+The MCP server starts with `clef-mcp` (stdio). Only `install` downloads model/runtime files. You can also use `npx -y clef-mcp` instead of a global install; `npx -y clef-mcp install --setup` combines model installation and client registration.
+
+## Classify JSONL/CSV with a YAML profile
+
+Define a task once, then apply it to separate records. The model loads once for the whole batch; a separate daemon is not required.
+
+Save this as `support-routing.yaml`:
+
+```yaml
+schema_version: 1
+name: support-routing
+instructions: Classify the current support request into exactly one department.
+labels:
+  billing: Payments, refunds, invoices and subscription charges
+  technical: Errors, outages, installation and integration problems
+  other: Requests outside billing and technical support
+input:
+  id_field: id
+  fields: [subject, body]
+policy:
+  min_probability: 0.80
+  min_margin: 0.15
+```
+
+Save `tickets.jsonl` (one object per line):
+
+```jsonl
+{"id":"001","subject":"Duplicate charge","body":"Please refund my duplicate subscription payment."}
+{"id":"002","subject":"Checkout crashes","body":"The payment page returns an error."}
+```
+
+Or use `tickets.csv` with a header row:
+
+```csv
+id,subject,body
+001,Duplicate charge,Please refund my duplicate subscription payment.
+002,Checkout crashes,The payment page returns an error.
+```
+
+```bash
+clef-mcp classify tickets.jsonl --profile support-routing.yaml --output results.jsonl
+clef-mcp classify tickets.csv --profile support-routing.yaml --output csv-results.jsonl
+# stdout carries JSONL; summaries and diagnostics go to stderr
+cat tickets.jsonl | clef-mcp classify - --profile support-routing.yaml
+# Extension override, including CSV on stdin
+cat tickets.csv | clef-mcp classify - --format csv --profile support-routing.yaml
+```
+
+Runnable files also ship in [`examples/classify/`](examples/classify/).
+
+### Profile fields
+
+| Field | Meaning |
+|---|---|
+| `schema_version` | Required; currently `1` |
+| `name` | Required profile ID, up to 64 letters/digits/underscores/hyphens, starting with a letter or digit |
+| `instructions` | Required classification question |
+| `labels` | Required map of 2–100 mutually exclusive label IDs to descriptions; include a fallback category where appropriate |
+| `model` | Optional model ID; priority is CLI `--model` → profile → `CLEF_MODEL` → `clef-flash` |
+| `input.fields` | Optional exact top-level field names to send to the model; otherwise use the full record |
+| `input.id_field` | Optional string/numeric ID to copy to the result; missing or invalid IDs become row errors |
+| `policy.min_probability` | Minimum winning probability, default `0.80` |
+| `policy.min_margin` | Minimum difference between the two highest probabilities, default `0.15` |
+| `policy.min_confidence` | Optional minimum runtime-reported confidence; missing confidence then requires review |
+| `examples` | Optional list of up to 20 `{input: {...}, label: configured_label}` references |
+
+Examples are data supplied alongside the current record; they do not train or modify model weights. Unknown fields, duplicate YAML keys, aliases, merge keys, unsupported tags and non-JSON values are rejected. Label IDs use the same character rules as profile names, with a 128-character limit; prototype-shaped reserved keys are rejected. Missing selected fields produce row errors.
+
+### Accepted results and `needs_review`
+
+Illustrative results (actual probabilities depend on your data and runtime):
+
+```jsonl
+{"row":1,"id":"001","profile":"support-routing","model":"clef-flash","status":"classified","label":"billing","suggested_label":"billing","probability":0.92,"margin":0.87,"probabilities":{"billing":0.92,"technical":0.05,"other":0.03},"review_reasons":[]}
+{"row":2,"id":"002","profile":"support-routing","model":"clef-flash","status":"needs_review","label":null,"suggested_label":"technical","probability":0.48,"margin":0.06,"probabilities":{"billing":0.42,"technical":0.48,"other":0.10},"review_reasons":["low_probability","low_margin"]}
+```
+
+`classified` means all configured thresholds passed. `needs_review` keeps the suggestion and full distribution but sets `label: null`. Reasons are `low_probability`, `low_margin`, `tie`, `low_confidence` or `missing_confidence`. Exact ties always require review, including when thresholds are zero. Comparisons are inclusive at the threshold. Results may include model `confidence` and token `usage` when available.
+
+Winning probability, probability margin and model-reported confidence are different quantities. These thresholds are routing policy, not a calibrated accuracy guarantee. Check them on representative labeled data before automating decisions. Classification does not grant authorization or execute actions.
+
+Invalid JSONL objects and missing fields produce `status: "error"` rows and processing continues. Runtime failures stop the run; they are never converted to review decisions. Output includes identifiers and results, not a copy of the original record.
+
+### Resume, formats and limits
+
+```bash
+clef-mcp classify tickets.jsonl --profile support-routing.yaml --output results.jsonl --resume
+```
+
+File output creates private `results.jsonl` and `results.jsonl.meta.json` files. The sidecar fingerprints the full input, validated profile, effective model, runtime and format. Resume requires all of these to match. Use a new output path after changing data or thresholds; existing files are never silently overwritten. Input must stay unchanged while a run is active.
+
+Resume skips the contiguous committed prefix, including committed error rows; it does not retry those errors. An incomplete final write is discarded, while corruption in a complete row is rejected. Resume requires regular file input and `--output`; stdin/stdout resume is unsupported. A local lock prevents simultaneous writers. Dead local writer locks can be reclaimed; active, foreign-host or unverifiable locks are preserved. A crash during lock acquisition may leave `.lock.claim`, which requires inspection before manual removal.
+
+JSONL accepts objects, ignores blank lines and supports UTF-8 BOM/CRLF. CSV supports quoted commas, escaped quotes and multiline fields; headers must be nonempty and unique, with consistent column counts. CSV cells remain strings, preserving IDs such as `001`. Format defaults to `.jsonl`/`.csv`, or JSONL for stdin; other extensions need `--format`.
+
+Profiles and logical records are limited to 1 MiB, YAML nesting to 64 levels, selected/CSV fields to 1000, and examples to 20. Existing instruction/criteria/state limits and the model's 16k-token context also apply; selected fields and examples share that context. Oversized JSONL rows are reported as row errors. Broken/oversized CSV syntax stops the run because record boundaries cannot be recovered reliably.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Completed; review results are allowed |
+| `1` | Row errors occurred in this invocation, or inference/output failed |
+| `2` | Invalid options/profile/input structure or incompatible checkpoint |
+| `3` / `4` | Model not installed / runtime missing |
+| `130` | Interrupted; committed file output can be resumed |
+
+### Update
+
+```bash
+npm install -g clef-mcp@latest
+```
+
+Restart MCP clients and any existing daemon after updating. An already installed model does not need another download.
 
 ## Why not just ask the LLM?
 
@@ -235,6 +350,7 @@ The `ClefRuntime` interface (`load / decide / unload / health`) isolates the eng
 ```bash
 clef-mcp              # run the MCP server on stdio (default command)
 clef-mcp decide       # one-shot decision (no MCP session): JSON in, JSON out — for hooks, CI, scripts
+clef-mcp classify     # apply a YAML profile to JSONL/CSV records; review uncertain results
 clef-mcp daemon       # keep the model warm on a local unix socket; `decide --daemon` uses it
 clef-mcp install      # detect hardware → download model + runtime → verify checksum → verify inference
 clef-mcp setup        # register the MCP server + agent skill in zcode / claude-code / codex / cursor
@@ -299,10 +415,10 @@ Codes: `MODEL_NOT_INSTALLED`, `MODEL_LOAD_FAILED`, `RUNTIME_NOT_FOUND`, `RUNTIME
 
 ## Security & data handling
 
-- No network servers, no telemetry, no accounts; everything runs locally.
+- No public network service, telemetry or accounts. MCP uses stdio; inference uses local loopback HTTP, and the optional daemon uses a local Unix socket.
 - The model downloads only on an explicit `install`, over HTTPS, checksum-verified.
 - `state` content is passed to the model as data; the server never executes or instruction-interprets it.
-- Filesystem access is limited to `CLEF_HOME` (plus reading standard MCP client config paths in `doctor`).
+- Model/runtime storage stays in `CLEF_HOME`. Classification also reads the input/profile paths you supply and writes explicit output/checkpoint paths; setup/doctor inspect or update supported client configuration.
 - The managed runtime is the official llama.cpp build; pin it with `CLEF_LLAMA_RELEASE_TAG`.
 
 See [SECURITY.md](SECURITY.md) for the full policy.

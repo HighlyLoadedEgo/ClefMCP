@@ -20,7 +20,8 @@ npm test
 
 ```text
 src/
-  cli/      commander commands (serve default, install, models, status, doctor, uninstall, evals)
+  cli/      commander commands (serve, decide, classify, daemon, install, setup, status, doctor, evals)
+  classify/ YAML profiles, confidence policy, streaming readers, durable output and resume
   mcp/      MCP server, clef_decide tool, zod schemas
   clef/     types, SystemOne adapter, structured errors
   runtime/  ClefRuntime interface, llama.cpp subprocess runtime, binary resolution
@@ -67,4 +68,4 @@ If you change prompting, adapter mapping or runtime, run evals before and after 
 
 1. Update `VERSION` in `src/version.ts`, `package.json` and `package-lock.json`; sync the versions in `server.json` and `manifest.json`, and add release notes to `CHANGELOG.md`.
 2. `npm test && npm run build && npm pack` — smoke-test the tarball.
-3. Commit and push the version tag (`git tag v0.3.1 && git push origin v0.3.1`) — the `publish.yml` workflow builds, tests and publishes to npm with provenance through Trusted Publishing (OIDC, no `NPM_TOKEN`), publishes to the official MCP Registry, and attaches a `.mcpb` bundle to the GitHub Release.
+3. Commit and push the version tag (`git tag v0.4.0 && git push origin v0.4.0`) — the `publish.yml` workflow builds, tests and publishes to npm with provenance through Trusted Publishing (OIDC, no `NPM_TOKEN`), waits for public npm visibility, publishes to the official MCP Registry, and attaches a `.mcpb` bundle to the GitHub Release. Verify each destination; a successful npm upload may precede public availability by several minutes.
