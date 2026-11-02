@@ -18,7 +18,7 @@ export interface InputSource {
 }
 
 async function* decoded(source: AsyncIterable<Buffer | string>): AsyncGenerator<string> {
-  const decoder = new TextDecoder('utf-8', { fatal: true });
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
   try {
     for await (const chunk of source) yield decoder.decode(typeof chunk === 'string' ? Buffer.from(chunk) : chunk, { stream: true });
     const tail = decoder.decode();
@@ -27,8 +27,9 @@ async function* decoded(source: AsyncIterable<Buffer | string>): AsyncGenerator<
 }
 
 /** Bounded physical lines, also reused for JSONL checkpoint validation. */
-export async function* boundedLines(source: AsyncIterable<Buffer | string>, maxBytes: number): AsyncGenerator<{ text: string; oversized: boolean; terminated: boolean }> {
+export async function* boundedLines(source: AsyncIterable<Buffer | string>, maxBytes: number): AsyncGenerator<{ text: string; oversized: boolean; terminated: boolean; bytes: number }> {
   let text = '', size = 0, oversized = false;
+  let first = true;
   for await (const chunk of decoded(source)) {
     let start = 0;
     for (;;) {
@@ -40,11 +41,13 @@ export async function* boundedLines(source: AsyncIterable<Buffer | string>, maxB
         else text += part;
       }
       if (end < 0) break;
-      yield { text: text.endsWith('\r') ? text.slice(0, -1) : text, oversized, terminated: true };
+      const line = (first ? text.replace(/^\uFEFF/, '') : text).replace(/\r$/, '');
+      first = false;
+      yield { text: line, oversized, terminated: true, bytes: size + 1 };
       text = ''; size = 0; oversized = false; start = end + 1;
     }
   }
-  if (text || oversized) yield { text, oversized, terminated: false };
+  if (text || oversized) yield { text: first ? text.replace(/^\uFEFF/, '') : text, oversized, terminated: false, bytes: size };
 }
 
 export async function* readRows(source: AsyncIterable<Buffer | string>, format: InputFormat): AsyncGenerator<InputRow> {
