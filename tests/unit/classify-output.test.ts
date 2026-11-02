@@ -42,6 +42,21 @@ describe('classification output checkpoints', () => {
     const text = (await fsp.readFile(file, 'utf8')).replace(/^\uFEFF/, '');
     expect(text.trim().split('\n').map((s) => JSON.parse(s).row)).toEqual([1, 2]);
   });
+  it('recovers an interrupted final record split inside a UTF-8 character', async () => {
+    await seed();
+    await fsp.appendFile(file, Buffer.concat([Buffer.from('{"row":2,"id":"'), Buffer.from([0xd0])]));
+    const out = await openOutput({ path: file, metadata, resume: true });
+    expect(out.completedRows).toBe(1);
+    await out.append(row(2)); await out.close();
+    expect((await fsp.readFile(file, 'utf8')).trim().split('\n').map((s) => JSON.parse(s).row)).toEqual([1, 2]);
+  });
+  it('preserves complete checkpoint rows containing invalid UTF-8', async () => {
+    await seed();
+    await fsp.appendFile(file, Buffer.from([0xd0, 0x0a]));
+    const before = await fsp.readFile(file);
+    await expect(openOutput({ path: file, metadata, resume: true })).rejects.toThrow();
+    expect(await fsp.readFile(file)).toEqual(before);
+  });
   it.each(['broken\n', JSON.stringify(row(2)) + '\n', JSON.stringify({ ...row(1), model: 'other' }) + '\n', JSON.stringify({ ...row(1), label: null }) + '\n'])('rejects complete checkpoint corruption %#', async (text) => {
     await seed(text);
     await expect(openOutput({ path: file, metadata, resume: true })).rejects.toThrow();

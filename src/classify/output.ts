@@ -136,7 +136,7 @@ export async function openOutput(options: OutputOptions): Promise<OutputSession>
         if (canonicalJson(await readJson(`${file}.meta.json`)) !== canonicalJson(metadata)) throw invalid('Resume metadata does not match input, profile, model, runtime or format');
         handle = await openRegular(file, true);
         let safeOffset = 0, partial = false;
-        for await (const line of boundedLines(fileChunks(handle), CLASSIFY_LIMITS.maxResultBytes)) {
+        for await (const line of boundedLines(fileChunks(handle), CLASSIFY_LIMITS.maxResultBytes, true)) {
           if (!line.terminated) { partial = true; break; }
           if (line.oversized) throw invalid('Checkpoint result exceeds the size limit');
           let value: unknown;

@@ -27,27 +27,37 @@ async function* decoded(source: AsyncIterable<Buffer | string>): AsyncGenerator<
 }
 
 /** Bounded physical lines, also reused for JSONL checkpoint validation. */
-export async function* boundedLines(source: AsyncIterable<Buffer | string>, maxBytes: number): AsyncGenerator<{ text: string; oversized: boolean; terminated: boolean; bytes: number }> {
-  let text = '', size = 0, oversized = false;
-  let first = true;
-  for await (const chunk of decoded(source)) {
+export async function* boundedLines(source: AsyncIterable<Buffer | string>, maxBytes: number, discardUnterminated = false): AsyncGenerator<{ text: string; oversized: boolean; terminated: boolean; bytes: number }> {
+  let pieces: Buffer[] = [], size = 0, oversized = false, first = true;
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  const line = (terminated: boolean) => {
+    let text = '';
+    if (!oversized && (terminated || !discardUnterminated)) {
+      try { text = decoder.decode(Buffer.concat(pieces, size)); }
+      catch { throw invalid('Cannot read UTF-8 input: invalid encoded record'); }
+      if (first) text = text.replace(/^\uFEFF/, '');
+      text = text.replace(/\r$/, '');
+    }
+    first = false;
+    return { text, oversized, terminated, bytes: size + (terminated ? 1 : 0) };
+  };
+  for await (const raw of source) {
+    const chunk = typeof raw === 'string' ? Buffer.from(raw) : raw;
     let start = 0;
     for (;;) {
-      const end = chunk.indexOf('\n', start);
-      const part = chunk.slice(start, end < 0 ? undefined : end);
+      const end = chunk.indexOf(0x0a, start);
+      const part = chunk.subarray(start, end < 0 ? undefined : end);
+      size += part.length;
       if (!oversized) {
-        size += Buffer.byteLength(part);
-        if (size > maxBytes) { oversized = true; text = ''; }
-        else text += part;
+        if (size > maxBytes) { oversized = true; pieces = []; }
+        else if (part.length) pieces.push(part);
       }
       if (end < 0) break;
-      const line = (first ? text.replace(/^\uFEFF/, '') : text).replace(/\r$/, '');
-      first = false;
-      yield { text: line, oversized, terminated: true, bytes: size + 1 };
-      text = ''; size = 0; oversized = false; start = end + 1;
+      yield line(true);
+      pieces = []; size = 0; oversized = false; start = end + 1;
     }
   }
-  if (text || oversized) yield { text: first ? text.replace(/^\uFEFF/, '') : text, oversized, terminated: false, bytes: size };
+  if (size) yield line(false);
 }
 
 export async function* readRows(source: AsyncIterable<Buffer | string>, format: InputFormat): AsyncGenerator<InputRow> {

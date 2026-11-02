@@ -7,7 +7,7 @@ import { getModelSpec } from '../models/registry.js';
 import { clefDecideInputSchema, validateStateSize } from '../mcp/schema.js';
 import { RuntimeLoader } from '../runtime/loader.js';
 import { openInput, type InputSource } from '../classify/input.js';
-import { openOutput, type OutputSession } from '../classify/output.js';
+import { openOutput, type OutputSession, type ClassificationResult } from '../classify/output.js';
 import { evaluateClassification } from '../classify/policy.js';
 import { invalid, loadProfile, profileDigest, profileState, selectRecord } from '../classify/profile.js';
 
@@ -38,6 +38,10 @@ export async function runClassify(inputPath: string, options: ClassifyOptions): 
     });
     await source.verifyUnchanged();
     const committed = output.completedRows;
+    const commit = async (result: ClassificationResult) => {
+      await source!.verifyUnchanged();
+      await output!.append(result);
+    };
     for await (const row of source.records()) {
       if (interrupted) break;
       total = row.row;
@@ -59,15 +63,16 @@ export async function runClassify(inputPath: string, options: ClassifyOptions): 
         }
       }
       if (rowError) {
-        await output.append({ ...base, status: 'error', label: null, error: rowError }); counts.errors++;
+        await commit({ ...base, status: 'error', label: null, error: rowError }); counts.errors++;
         continue;
       }
       const { runtime } = await loader.ensure(spec);
       if (interrupted) break;
+      await source.verifyUnchanged();
       const response = await runtime.decide(toSystemOneRequest(doc!, model));
       const adapted = fromSystemOneResponse(response, doc!.questions, model);
       const result = evaluateClassification(profile, adapted.decisions.classification!);
-      await output.append({ ...base, ...result, ...(adapted.usage ? { usage: adapted.usage } : {}) });
+      await commit({ ...base, ...result, ...(adapted.usage ? { usage: adapted.usage } : {}) });
       counts[result.status]++;
     }
     if (interrupted) return 130;

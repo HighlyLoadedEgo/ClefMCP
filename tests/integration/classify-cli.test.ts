@@ -110,4 +110,33 @@ describe('classify CLI', () => {
       expect(rows(await fsp.readFile(output, 'utf8')).map((r) => r.row)).toEqual(Array.from({ length: 15 }, (_, i) => i + 1));
     } finally { await fsp.rm(slow.clefHome, { recursive: true, force: true }); }
   });
+  it('does not commit rows from an input changed during inference', async () => {
+    const slow = await makeFakeInstall({ inferenceDelayMs: 200 });
+    let child: ReturnType<typeof spawn> | undefined;
+    try {
+      const data = path.join(slow.clefHome, 'mutable.jsonl'), output = path.join(slow.clefHome, 'mutable-output.jsonl'), starts = path.join(slow.clefHome, 'started');
+      const first = JSON.stringify({ id: 'first', body: 'a'.repeat(65536 - Buffer.byteLength(JSON.stringify({ id: 'first', body: '' })) - 1) }) + '\n';
+      expect(Buffer.byteLength(first)).toBe(65536);
+      const original = first + JSON.stringify({ id: 'original', body: 'test' }) + '\n';
+      await fsp.writeFile(data, original);
+      const args = ['classify', data, '--profile', profile, '--output', output];
+      child = spawn(process.execPath, [cliPath(), ...args], { env: { ...slow.env, FAKE_LLAMA_START_LOG: starts }, stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderr = ''; child.stderr!.on('data', (c) => stderr += c);
+      const done = new Promise((resolve) => child!.on('close', resolve));
+      const deadline = Date.now() + 10000;
+      while (!await fsp.stat(starts).then(() => true, () => false)) {
+        if (Date.now() > deadline) throw new Error('Runtime did not start');
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      await fsp.writeFile(data, first + JSON.stringify({ id: 'modified', body: 'test' }) + '\n');
+      expect(await done).toBe(2); expect(stderr).toContain('Input changed');
+      expect(await fsp.readFile(output, 'utf8')).toBe('');
+      await fsp.writeFile(data, original);
+      expect((await run([...args, '--resume'], slow.env)).code).toBe(0);
+      expect(rows(await fsp.readFile(output, 'utf8')).map((r) => r.id)).toEqual(['first', 'original']);
+    } finally {
+      if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      await fsp.rm(slow.clefHome, { recursive: true, force: true });
+    }
+  });
 });
